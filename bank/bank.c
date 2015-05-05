@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#define MAX_ARG1_SIZE = 11;
+#define MAX_ARG2_SIZE = 250;
+#define MAX_OTHER_ARG_SIZE = 9; 
+#define MAX_LINE_SIZE = 10000;
+
 Bank* bank_create()
 {
     Bank *bank = (Bank*) malloc(sizeof(Bank));
@@ -57,6 +62,66 @@ ssize_t bank_recv(Bank *bank, char *data, size_t max_data_len)
 
 void bank_process_local_command(Bank *bank, char *command, size_t len)
 {
+    char arg1[MAX_ARG1_SIZE];
+    char arg1temp[MAX_LINE_SIZE];
+    char arg2[MAX_ARG2_SIZE];
+    char arg2temp[MAX_LINE_SIZE];
+    char arg3[MAX_ARG3_SIZE];
+    char arg3temp[MAX_LINE_SIZE];
+    char arg4[MAX_ARG3_SIZE];
+    char arg4temp[MAX_LINE_SIZE];
+ 
+
+    memset(arg1, 0x00, MAX_ARG1_SIZE);
+    memset(arg1temp; 0x00, MAX_LINE_SIZE);
+    memset(arg2, 0x00, MAX_ARG2_SIZE);
+    memset(arg2temp; 0x00, MAX_LINE_SIZE);
+    memset(arg3, 0x00, MAX_ARG3_SIZE);
+    memset(arg3temp; 0x00, MAX_LINE_SIZE);
+    memset(arg4, 0x00, MAX_ARG4_SIZE);
+    memset(arg4temp; 0x00, MAX_LINE_SIZE);
+
+    //parse first command
+    if(strlen(command) > MAX_LINE_SIZE){
+        printf("Invalid command");
+        return;
+    }
+
+    sscanf(command, "%s %s %s %s", arg1temp, arg2temp, arg3temp, arg4temp);
+    strncpy(arg1, arg1temp, MAX_ARG1_SIZE);
+
+    if(strcmp(arg1, "create-user") == 0){
+        //3 more arguments
+        if(arg2temp == NULL || arg3temp == NULL || arg4temp == NULL){
+            printf("Usage: create-user <user-name> <pin> <balance>");
+            return;
+        }
+
+        //no need to use regexp. A-Z ascii dec range is 65-90, a-z 97-122
+        if(username_is_valid == -1){
+            printf("Usage: create-user <user-name> <pin> <balance>");
+            return;
+        }
+
+        //create user, .card file
+
+    } else if (strcmp(arg1, "deposit") == 0) {
+        if(arg2temp == NULL || arg3temp == NULL || arg4temp == NULL || username_is_valid == -1){
+            printf("Usage: create-user <user-name> <pin> <balance>");
+            return;
+        }
+
+        //no need to use regexp. A-Z ascii dec range is 65-90, a-z 97-122
+        if(username_is_valid == -1){
+            printf("Usage: create-user <user-name> <pin> <balance>");
+            return;
+        }       
+    } else  if (strcmp(arg1, "balance") == 0) {
+
+    } else {
+        printf("Invalid command");
+        return;
+    }
     // TODO: Implement the bank's local commands
 }
 
@@ -78,4 +143,21 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
     printf("Received the following:\n");
     fputs(command, stdout);
 	*/
+}
+
+//-1 false, 1 true, 0 unknown/null; A-Z ascii dec range is 65-90, a-z 97-122
+int username_is_valid(char *username){
+    if(username == NULL){
+        return 0;
+    }
+
+    int i;
+    for(i = 0; i < strlen(username); i++){
+        if(username[i] > 122 || username[i] < 65){
+            return -1;
+        } else if (username[i] > 90 && username[i] < 97){
+            return -1;
+        }
+    }
+    return 1;
 }
