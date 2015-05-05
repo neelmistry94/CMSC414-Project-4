@@ -3,10 +3,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdio.h>
 
-#define MAX_ARG1_SIZE = 11;
-#define MAX_ARG2_SIZE = 250;
-#define MAX_OTHER_ARG_SIZE = 9; 
+#define MAX_ARG1_SIZE = 12; //11 + Null
+#define MAX_ARG2_SIZE = 251; //250 + Null character
+#define MAX_OTHER_ARG_SIZE = 10; //9 + Null
 #define MAX_LINE_SIZE = 10000;
 
 Bank* bank_create()
@@ -76,9 +77,9 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
     memset(arg1temp; 0x00, MAX_LINE_SIZE);
     memset(arg2, 0x00, MAX_ARG2_SIZE);
     memset(arg2temp; 0x00, MAX_LINE_SIZE);
-    memset(arg3, 0x00, MAX_ARG3_SIZE);
+    memset(arg3, 0x00, MAX_OTHER_ARG_SIZE);
     memset(arg3temp; 0x00, MAX_LINE_SIZE);
-    memset(arg4, 0x00, MAX_ARG4_SIZE);
+    memset(arg4, 0x00, MAX_OTHER_ARG_SIZE);
     memset(arg4temp; 0x00, MAX_LINE_SIZE);
 
     //parse first command
@@ -97,8 +98,9 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
             return;
         }
 
+        strncpy(arg2, arg2temp, MAX_ARG2_SIZE);
         //no need to use regexp. A-Z ascii dec range is 65-90, a-z 97-122
-        if(username_is_valid == -1){
+        if(username_is_valid(arg2) == -1){
             printf("Usage: create-user <user-name> <pin> <balance>");
             return;
         }
@@ -106,17 +108,28 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
         //create user, .card file
 
     } else if (strcmp(arg1, "deposit") == 0) {
-        if(arg2temp == NULL || arg3temp == NULL || arg4temp == NULL || username_is_valid == -1){
+        if(arg2temp == NULL || arg3temp == NULL){
             printf("Usage: create-user <user-name> <pin> <balance>");
             return;
         }
 
-        //no need to use regexp. A-Z ascii dec range is 65-90, a-z 97-122
-        if(username_is_valid == -1){
+        strncpy(arg2, arg2temp, MAX_ARG2_SIZE);
+        if(username_is_valid(arg2) == -1){
             printf("Usage: create-user <user-name> <pin> <balance>");
             return;
-        }       
+        }
+   
     } else  if (strcmp(arg1, "balance") == 0) {
+        if(arg2temp == NULL || username_is_valid == -1){
+            printf("Usage: create-user <user-name> <pin> <balance>");
+            return;
+        }
+
+        strncpy(arg2, arg2temp, MAX_ARG2_SIZE);
+        if(username_is_valid(arg2) == -1){
+            printf("Usage: create-user <user-name> <pin> <balance>");
+            return;
+        }
 
     } else {
         printf("Invalid command");
@@ -127,6 +140,9 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
 
 void bank_process_remote_command(Bank *bank, char *command, size_t len)
 {
+    //decrypt on arrival
+
+
     // TODO: Implement the bank side of the ATM-bank protocol
 
 	/*
@@ -160,4 +176,27 @@ int username_is_valid(char *username){
         }
     }
     return 1;
+}
+
+int user_exists(char* username){
+    int ufilelen = strlen(username) + 5;
+    char ext[5] = ".card";
+    char userfile[ufilelen]; //5 = . c a r d
+    memset(userfile, 0x00, ufilelen);
+    strncpy(userfile, username, strlen(username));
+    strncat(userfile, ext, 5);
+
+    if(access(userfile, F_OK) != -1){
+        return 0;
+    } else { 
+        return - 1;
+    }
+}
+
+void decrypt_incoming(char* str, char *dec){
+
+}
+
+void encrypt_outgoing(char *str, char *enc){
+
 }
