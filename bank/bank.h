@@ -29,6 +29,7 @@ typedef struct _Bank
 
     // Protocol state
     // TODO add more, as needed
+    struct List pin_bal;
 } Bank;
 
 Bank* bank_create();

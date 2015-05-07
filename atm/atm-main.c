@@ -12,17 +12,29 @@ static const char prompt[] = "ATM: ";
 
 int main()
 {
+    session_started = 0;
+    memset(username, 0x00, 251);
     char user_input[1000];
 
     ATM *atm = atm_create();
 
+    FILE *init = fopen("init.atm", "r");
+    if(init == NULL){
+        printf("Error opening ATM initialization file\n");
+        return 64;
+    }
+
     printf("%s", prompt);
     fflush(stdout);
 
-    while (fgets(user_input, 10000,stdin) != NULL)
+    while (fgets(user_input, 1000,stdin) != NULL)
     {
         atm_process_command(atm, user_input);
-        printf("%s", prompt);
+        if(session_started == 1){
+            printf("ATM (%s): ", username);
+        } else {
+            printf("%s", prompt);
+        }
         fflush(stdout);
     }
 	return EXIT_SUCCESS;

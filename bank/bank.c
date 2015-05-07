@@ -1,14 +1,18 @@
 #include "bank.h"
 #include "ports.h"
+#include "list.h"
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <limits.h>
+#include <openssl/sha.h>
 
-#define MAX_ARG1_SIZE = 12; //11 + Null
+#define MAX_ARG1_SIZE = 12; //11 + 1 for Null
 #define MAX_ARG2_SIZE = 251; //250 + Null character
 #define MAX_OTHER_ARG_SIZE = 10; //9 + Null
-#define MAX_LINE_SIZE = 10000;
+#define MAX_LINE_SIZE = 1001; //10000 + Null
+#define ENC_LEN = 2048;
 
 Bank* bank_create()
 {
@@ -35,6 +39,9 @@ Bank* bank_create()
 
     // Set up the protocol state
     // TODO set up more, as needed
+
+    //create bal_list
+    bank->pin_bal = list_create();
 
     return bank;
 }
@@ -67,9 +74,9 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
     char arg1temp[MAX_LINE_SIZE];
     char arg2[MAX_ARG2_SIZE];
     char arg2temp[MAX_LINE_SIZE];
-    char arg3[MAX_ARG3_SIZE];
+    char arg3[MAX_OTHER_ARG_SIZE];
     char arg3temp[MAX_LINE_SIZE];
-    char arg4[MAX_ARG3_SIZE];
+    char arg4[MAX_OTHER_ARG_SIZE];
     char arg4temp[MAX_LINE_SIZE];
  
 
@@ -84,64 +91,224 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
 
     //parse first command
     if(strlen(command) > MAX_LINE_SIZE){
-        printf("Invalid command");
+        printf("Invalid command\n");
         return;
     }
 
     sscanf(command, "%s %s %s %s", arg1temp, arg2temp, arg3temp, arg4temp);
-    strncpy(arg1, arg1temp, MAX_ARG1_SIZE);
+    
+    //max arg1 length is 10 (c r e a t e - u s e r)
+    if(strlen(arg1temp) > 10){
+        printf("Invalid command\n");
+        return;
+    }
 
+    strncpy(arg1, arg1temp, MAX_ARG1_SIZE);
     if(strcmp(arg1, "create-user") == 0){
         //3 more arguments
         if(arg2temp == NULL || arg3temp == NULL || arg4temp == NULL){
-            printf("Usage: create-user <user-name> <pin> <balance>");
+            printf("Usage: create-user <user-name> <pin> <balance>\n");
             return;
         }
 
-        strncpy(arg2, arg2temp, MAX_ARG2_SIZE);
+        //max username 250 chars
+        if(strlen(arg2temp) > 250){
+            printf("Usage: create-user <user-name> <pin> <balance>\n");
+            return;
+        }
+
+        strncpy(arg2, arg2temp, strlen(arg2temp));
         //no need to use regexp. A-Z ascii dec range is 65-90, a-z 97-122
         if(username_is_valid(arg2) == -1){
-            printf("Usage: create-user <user-name> <pin> <balance>");
+            printf("Usage: create-user <user-name> <pin> <balance>\n");
             return;
         }
 
-        //create user, .card file
+        //does user exist?
+        if(user_exists(arg2) == 0){
+            printf("Error user %s already exists\n", arg2);
+            return;
+        }
+
+        //max pin is 4 chars
+        if(strlen(arg3temp) > 4){
+            printf("Usage: create-user <user-name> <pin> <balance>\n");
+            return;
+        }
+
+        strncpy(arg3, arg3temp, strlen(arg3temp));
+        //check valadity of arg3 (pin)
+        if(valid_pin(arg3) == -1){
+            printf("Usage: create-user <user-name> <pin> <balance>\n");
+            return;
+        }
+
+        //balance is INT_MAX, here is 2,147,483,647 or 10 chars
+        if(strlen(arg4temp) > 10){
+            printf("Usage: create-user <user-name> <pin> <balance>\n");
+            return;           
+        }
+
+        strncpy(arg4, arg4temp, strlen(arg4temp));
+        //check validity of balance (should not be negative or higher than INT_MAX)
+        if(valid_balanceamt_input(arg4) == -1){
+            printf("Usage: create-user <user-name> <pin> <balance>\n");
+            return;    
+        }
+
+
+        /***MAKE .CARD***/
+        //hash pin make sure using -lcrypto in makefile
+        unsigned char hash[SHA_DIGEST_LENGTH];
+        size_t hlength = sizeof(arg3);
+        int times = 8;
+       //REMEMBER TO USE A SALT
+        SHA1(arg3, hlength, hash);
+        while(times > 0){
+            hlength = sizeof(hash);
+            SHA1(hash, hlength, hash);
+            times--;
+        }
+
+        //just concanting username and extension
+        char *ext = ".card";
+        int ufilelen = strlen(arg2) + 6; //5 = . c a r d and + 1 for null
+        char userfile[ufilelen]; //5 = . c a r d
+        memset(userfile, 0x00, ufilelen);
+        strncpy(userfile, arg2, strlen(arg2));
+        strncat(userfile, ext, 5);
+        FILE *card = fopen(userfile, "w");
+        if(card == NULL){
+            printf("Error creating card file for user %s\n", arg2);
+            //roll back bank, which means just delete file
+            remove(userfile);
+            return;
+        }
+
+        //put hashed pin in file
+        fprinf(card, "%s", hash);
+
+        //close
+        fclose(card);
+
+        //make balance an int
+        int bal = strtol(arg4);
+
+        //add to hash to pin->balance list
+        list_add(bank->pin_bal, hash, bal);
+
+        printf("Created user %s\n", arg2);
+        return;
 
     } else if (strcmp(arg1, "deposit") == 0) {
         if(arg2temp == NULL || arg3temp == NULL){
-            printf("Usage: create-user <user-name> <pin> <balance>");
+            printf("Usage: deposit <user-name> <amt>\n");
             return;
         }
 
-        strncpy(arg2, arg2temp, MAX_ARG2_SIZE);
-        if(username_is_valid(arg2) == -1){
-            printf("Usage: create-user <user-name> <pin> <balance>");
+        //max username 250 chars
+        if(strlen(arg2temp) > 250){
+            printf("Usage: deposit <user-name> <amt>\n");
             return;
         }
+
+        strncpy(arg2, arg2temp, strlen(arg2temp));
+        //no need to use regexp. A-Z ascii dec range is 65-90, a-z 97-122
+        if(username_is_valid(arg2) == -1){
+            printf("Usage: deposit <user-name> <amt>\n");
+            return;
+        }
+
+        //does user exist?
+        if(user_exists(arg2) == -1){
+            printf("No such user\n");
+            return;
+        }
+
+        //amt max is INT_MAX, here is 2,147,483,647 or 10 chars
+        if(strlen(arg3temp) > 10){
+                if(contains_nondigit(arg3temp) == 0){
+                    printf("Usage: deposit <user-name> <amt>\n");
+                    return;
+                } else if(strlen(arg3temp) > 10 || strtol(arg3temp) > INT_MAX){
+                    printf("Too rich for this program\n");
+                    return;
+                }
+            printf("Usage: deposit <user-name> <amt>\n");
+            return;           
+        }
+
+        strncpy(arg3, arg3temp, strlen(arg3temp));
+        //check validity of balance (should not be negative or higher than INT_MAX)
+        if(valid_balanceamt_input(arg3) == -1){
+            printf("Usage: deposit <user-name> <amt>\n");
+            return;    
+        }
+
+        int curr_bal = (int) *(list_find(bank->pin_bal, arg2));
+        int amt = strtol(arg3);
+        long new_bal = amt + curr_bal;
+        if(new_bal > INT_MAX){
+            printf("Too rich for this program\n");
+            return;           
+        }
+
+        //update balance
+        list_add(bank->pin_bal, arg2, new_bal);
+
+        printf("$%s added to %s's account\n", arg3, arg2);
+        return;
    
     } else  if (strcmp(arg1, "balance") == 0) {
         if(arg2temp == NULL || username_is_valid == -1){
-            printf("Usage: create-user <user-name> <pin> <balance>");
+            printf("Usage: balance <user-name>\n");
+            return;
+        }
+
+        if(strlen(arg2temp) > 250){
+            printf("Usage: balance <user-name>\n");
             return;
         }
 
         strncpy(arg2, arg2temp, MAX_ARG2_SIZE);
         if(username_is_valid(arg2) == -1){
-            printf("Usage: create-user <user-name> <pin> <balance>");
+            printf("Usage: balance <user-name>\n");
             return;
         }
 
+        //does user exist?
+        if(user_exists(arg2) == -1){
+            printf("No such user\n");
+            return;
+        }
+
+        int curr_bal = (int) *(list_find(bank->pin_bal, arg2));
+        printf("$%d\n", curr_bal);
+        return;
+
     } else {
-        printf("Invalid command");
+        printf("Invalid command\n");
         return;
     }
-    // TODO: Implement the bank's local commands
 }
 
 void bank_process_remote_command(Bank *bank, char *command, size_t len)
 {
-    //decrypt on arrival
+    //decrypt and verify arrival
+    char dec[ENC_LEN];
+    char enc[ENC_LEN];
+    char *inv = "invalid";
+    memset(dec, 0x00, ENC_LEN);
+    if(decrypt_and_verify(command, dec) == -1){
+        if(encrypt_and_sign("invalid", enc) == -1){
+            //should never happen
+            printf("FATAL ERROR\n");
+        }
+        bank_send(bank, enc, sizeof(enc));
+        return;
+    }
 
+    //dec is the actual command
 
     // TODO: Implement the bank side of the ATM-bank protocol
 
@@ -178,9 +345,10 @@ int username_is_valid(char *username){
     return 1;
 }
 
-int user_exists(char* username){
-    int ufilelen = strlen(username) + 5;
-    char ext[5] = ".card";
+//0 = true, -1 = false
+int user_exists(char *username){
+    char *ext = ".card";
+    int ufilelen = strlen(username) + 6; //5 = . c a r d and + 1 for null
     char userfile[ufilelen]; //5 = . c a r d
     memset(userfile, 0x00, ufilelen);
     strncpy(userfile, username, strlen(username));
@@ -193,10 +361,53 @@ int user_exists(char* username){
     }
 }
 
-void decrypt_incoming(char* str, char *dec){
+//0  true, -1 false
+int valid_pin(char *pin){
+    if(contains_nondigit(pin) == 0){
+        return -1;
+    }
+
+    int d = strtol(pin, NULL, 10);
+    if (d < 0 || d > 9999){
+        return -1;
+    }
+    return 0;
+}
+
+// 0 true, 1 false
+int valid_balanceamt_input(char *balance){
+    if(contains_nondigit(balance) == 0){
+        return -1;
+    }
+
+    int d = strtol(balance, NULL, 10);
+    if( d < 0 || d > INT_MAX){
+        return -1;
+    }
+    return 0;
+}
+
+int contains_nondigit(char *str){
+    int i;
+    for(i = 0; i > strlen(str); i++){
+        if(str[i] > 9){
+            return -1;
+        }
+    }
+    return 0;
+}
+
+//-1 if failed to decrypt or verify
+//takes in msg and decrypts it and verifies it's certificate(signature) as well
+/*stores decrypted msg in dec[]. If dec is not being stored, try changing the parameter
+to char *dec*/
+int decrypt_and_verify(char* msg, char dec[]){
 
 }
 
-void encrypt_outgoing(char *str, char *enc){
+//-1 if failed to encrypt and sign
+/*stores encrypted msg into enc[], and signs it as well.
+*/
+void encrypt_and_sign(char *msg, char enc[]){
 
 }

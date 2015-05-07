@@ -33,4 +33,7 @@ ssize_t atm_send(ATM *atm, char *data, size_t data_len);
 ssize_t atm_recv(ATM *atm, char *data, size_t max_data_len);
 void atm_process_command(ATM *atm, char *command);
 
+extern int session_started; //0 no, 1 yes //7 chars from ATM (): and 250 from max username + 1 for null
+extern char[251] username; //+1 for null
+
 #endif
