@@ -324,7 +324,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
     memset(arg4, 0x00, 11);
     memset(arg4temp, 0x00, MAX_INC_MSG);
 
-    sscanf(dec, "%s %s %s", arg1temp, arg2temp, arg3temp);
+    sscanf(dec, "%s %s %s %s", arg1temp, arg2temp, arg3temp, arg4temp);
     if(arg1temp == NULL){
         send_invalid();
         return;
@@ -617,6 +617,7 @@ void send_invalid(){
     if(encrypt_and_sign("invalid", enc) == -1){
         //should never happen
         printf("FATAL ERROR\n");
+        EXIT_FAILURE;
     }
     bank_send(bank, enc, sizeof(enc));
     return; 
@@ -630,6 +631,7 @@ void send_s(){
     if(encrypt_and_sign("s", enc) == -1){
         //should never happen
         printf("FATAL ERROR\n");
+        EXIT_FAILURE;
     } 
     bank_send(bank, enc, sizeof(enc));
     return;  
@@ -642,6 +644,7 @@ void send_ng(){
     if(encrypt_and_sign("ng", enc) == -1){
         //should never happen
         printf("FATAL ERROR\n");
+        EXIT_FAILURE;
     } 
     bank_send(bank, enc, sizeof(enc));
     return; 
@@ -654,6 +657,7 @@ void send_une(){
     if(encrypt_and_sign("une", enc) == -1){
         //should never happen
         printf("FATAL ERROR\n");
+        EXIT_FAILURE;
     } 
     bank_send(bank, enc, sizeof(enc));
     return; 
@@ -666,6 +670,7 @@ void send_ce(){
     if(encrypt_and_sign("ce", enc) == -1){
         //should never happen
         printf("FATAL ERROR\n");
+        EXIT_FAILURE;
     } 
     bank_send(bank, enc, sizeof(enc));
     return; 
@@ -677,6 +682,7 @@ void send_bal(char *bal){
     if(encrypt_and_sign(bal, enc) == -1){
         //should never happen
         printf("FATAL ERROR\n");
+        EXIT_FAILURE;
     } 
     bank_send(bank, enc, sizeof(enc));
     return; 
@@ -701,23 +707,25 @@ int get_bal(char *username, char *pin){
     }
 }
 
+//-1 if failed to encrypt and sign
+/*stores encrypted msg into enc[], and signs it as well.
+store signature in a temp file to be read by otherside
+*/
+int encrypt_and_sign(char *msg, char *enc){
+    strncpy(enc, msg);
+}
+
 //-1 if failed to decrypt or verify
 /*takes in msg and decrypts it and verifies it's certificate(signature) as well
 tores decrypted msg in dec[]. If dec is not being stored, try changing the parameter
 to char *dec
 read signature from temp file made
  by otherside*/
-int decrypt_and_verify(char* msg, char dec[]){
-
+void decrypt_and_verify(char *enc, char *dec){
+    //placeholder
+    strncpy(dec, enc);
 }
 
-//-1 if failed to encrypt and sign
-/*stores encrypted msg into enc[], and signs it as well.
-store signature in a temp file to be read by otherside
-*/
-void encrypt_and_sign(char *msg, char enc[]){
-
-}
 
 //gets the salt for hashing
 void get_salt(char salt[]){

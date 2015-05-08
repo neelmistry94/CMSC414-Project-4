@@ -12,8 +12,6 @@ static const char prompt[] = "ATM: ";
 
 int main()
 {
-    session_started = 0;
-    memset(username, 0x00, 251);
     char user_input[1000];
 
     ATM *atm = atm_create();

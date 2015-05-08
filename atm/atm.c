@@ -8,7 +8,8 @@
 #define MAX_ARG2_SIZE= 251; //+1 for null char
 #define MAX_LINE_SIZE = 1001;
 #define ENC_LEN = 2048;
-#define MAX_RSP_SIZE = 300;
+#define MAX_RSP_SIZE = 11;
+#define MAX_MSG_SIZE = 300;
 
 ATM* atm_create()
 {
@@ -35,6 +36,9 @@ ATM* atm_create()
 
     // Set up the protocol state
     // TODO set up more, as needed
+    atm->session_started = 0;
+    memset(atm->username, 0x00, 251);
+    memset(atm->pin, 0x00, 5);
 
     return atm;
 }
@@ -43,6 +47,9 @@ void atm_free(ATM *atm)
 {
     if(atm != NULL)
     {
+        atm->session_started = 0;
+        atm->pin = NULL;
+        atm->username = NULL;
         close(atm->sockfd);
         free(atm);
     }
@@ -82,7 +89,7 @@ void atm_process_command(ATM *atm, char *command)
 
     strncpy(arg1, arg1temp, strlen(arg1temp));
     if(strcmp(arg1, "begin-session") == 0){
-        if(session_started == 1){
+        if(atm->session_started == 1){
             printf("A user is already logged in\n");
             return;
         }
@@ -105,37 +112,226 @@ void atm_process_command(ATM *atm, char *command)
 
 
         //check user exists
-        char enc[ENC_LEN], dec[MAX_RSP_SIZE], recv[MAX_RSP_SIZE];
+        char enc[ENC_LEN], dec[MAX_RSP_SIZE], recv[ENC_LEN];
         char msg1[strlen(arg2)+3];
         memset(msg1, 0x00, strlen(arg2)+3);
         memset(enc, 0x00, ENC_LEN);
         memset(dec, 0x00, MAX_RSP_SIZE);
-        strncpy(msg1, arg2, strlen(arg2));
-        strncat(msg1, " ?", 2);
+        memset(recv, 0x00, ENC_LEN);
+        strncpy(msg1, "? ", 2);
+        strncat(msg1, arg2, strlen(arg2));
         if(encrypt_and_sign(msg1, enc) == -1){
             printf("Unable to access %s's card\n", arg2);
             return;
         };
         atm_send(atm, enc, sizeof(enc));
-        atm_recv(atm, recv, MAX_RSP_SIZE);
+        atm_recv(atm, recv, ENC_LEN);
         if(decrypt_and_verify(recv,dec) == -1){
             printf("Unable to access %s's card\n", arg2);
             return;
         }
-        if(strlen(dec) > 252){
-            //max username lenght + space + ?
-            printf("Unable to access %s's card\n", arg2);
-            return;            
-        }
-        sscanf(dec, "%s", rec)
 
+        if(strlen(dec) > 10){
+            printf("Unable to access %s's card\n", arg2);
+            return;
+        }
+        
+        char resp[MAX_RSP_SIZE]; //max response is only 3 characaters
+        memset(resp, 0x00, MAX_RSP_SIZE);
+        sscanf(dec, "%s", resp);
+
+        if(strcmp(resp, "invalid") == 0){
+            printf("Usage: begin-session <user-name>\n");
+            return;
+        }
+
+        if(strcmp(resp, "ng") == 0){
+            printf("No such user\n");
+            return;
+        }
+
+        if(strcmp(resp, "s") != 0){
+            //Should not even be possible
+            printf("Usage: begin-session <user-name>\n");
+            return;
+        }
+
+        char pin[5];
+        memset(pin, 0x00, 5);
+        printf("PIN? ");
+        fgets(pin , 4, stdin);
+
+        if(contains_nondigit(pin) == 0){
+            printf("Not authorized\n");
+            return;
+        }
+
+        char msg[260]; // p + username + pin + spaces -> 1 + 250 + 4 + 3 + 1(Null)
+
+        //reset prev used vars
+        memset(msg, 0x00, MAX_MSG_SIZE);
+        memset(enc, 0x00, ENC_LEN);
+        memset(dec, 0x00, MAX_RSP_SIZE);
+        memset(recv, 0x00, ENC_LEN);
+        memset(resp, 0x00, MAX_RSP_SIZE);
+        strncpy(msg, "p ", 2);
+        strncat(msg, arg2, strlen(arg2));
+        strncat(msg, " ", 1);
+        strncat(msg, pin, 4);
+        if(encrypt_and_sign(msg, enc) == -1){
+            printf("Not authorized\n");
+            return;
+        };
+        atm_send(atm, enc, sizeof(enc));
+        atm_recv(atm, recv, ENC_LEN);
+        if(decrypt_and_verify(recv,dec) == -1){
+            printf("Not authorized\n");
+            return;
+        }
+
+        if(strlen(dec) > 10){
+            printf("Not authorized\n");
+            return;
+        }
+
+        sscanf(dec, "%s", resp);
+
+        if(strcmp(resp, "s") !=  0){
+            printf("Not authorized\n");
+            return;
+        } else {
+            printf("Authorized\n");
+        }
+
+        strncpy(atm->username, arg2, strlen(arg2));
+        strncpy(atm->pin, pin, 4);
+        atm->session_started = 1;
+        return;
 
     } else if (strcmp(arg1, "withdraw") == 0){
+        if(atm->session_started == 0){
+            printf("No user logged in\n");
+            return;
+        }
+
+        if(arg2temp == NULL){
+            printf("Usage: withdraw <amt>\n");
+            return;
+        }
+
+        if(strlen(arg2temp) > 10){
+            printf("Usage: withdraw <amt>\n");
+            return;            
+        }
+
+        strncpy(arg2, arg2temp, strlen(arg2temp));
+        if(contains_nondigit(arg2) == 0){
+            printf("Usage: withdraw <amt>\n");
+            return;             
+        }
+
+        char enc[ENC_LEN], dec[MAX_RSP_SIZE], recv[ENC_LEN], msg[MAX_MSG_SIZE], resp[MAX_RSP_SIZE];
+        memset(msg, 0x00, MAX_MSG_SIZE);
+        memset(enc, 0x00, ENC_LEN);
+        memset(dec, 0x00, MAX_RSP_SIZE);
+        memset(recv, 0x00, ENC_LEN);
+        memset(resp, 0x00, MAX_RSP_SIZE);
+
+        strncpy(msg, "w ", 2);
+        strncat(msg, atm->username, strlen(atm->username));
+        strncat(msg, " ", 1);
+        strncat(msg, atm->pin, 4);
+        strncat(msg, " ", 1);
+        strncat(msg, arg2, strlen(arg2));
+
+        if(encrypt_and_sign(msg, enc) == -1){
+            printf("Usage: withdraw <amt>\n");
+            return;
+        };
+        atm_send(atm, enc, sizeof(enc));
+        atm_recv(atm, recv, ENC_LEN);
+        if(decrypt_and_verify(recv,dec) == -1){
+            printf("Usage: withdraw <amt>\n");
+            return;
+        }
+
+        if(strlen(dec) > 10){
+            printf("Usage: withdraw <amt>\n");
+            return;
+        }
+
+        sscanf(dec, "%s", resp);
+
+        if(strcmp(resp, "invalid") == 0 || strcmp(resp, "une") == 0){
+            printf("Usage: withdraw <amt>\n");
+            return;
+        }
+
+        if(strcmp(resp, "ng") == 0){
+            printf("Insufficient funds\n");
+            return;
+        }
+
+        if(strcmp(resp, "s") == 0){
+            printf("$%d dispensed", arg2);
+            return;
+        }
 
     } else if (strcmp(arg1, "balance") == 0){
+        if(atm->session_started == 0){
+            printf("No user logged in\n");
+            return;
+        }
+
+        char enc[ENC_LEN], dec[MAX_RSP_SIZE], recv[ENC_LEN], msg[MAX_MSG_SIZE], resp[MAX_RSP_SIZE];
+        memset(msg, 0x00, MAX_MSG_SIZE);
+        memset(enc, 0x00, ENC_LEN);
+        memset(dec, 0x00, MAX_RSP_SIZE);
+        memset(recv, 0x00, ENC_LEN);
+        memset(resp, 0x00, MAX_RSP_SIZE);
+
+        strncpy(msg, "b ", 2);
+        strncat(msg, atm->username, strlen(atm->username));
+        strncat(msg, " ", 1);
+        strncat(msg, atm->pin, 4);
+
+        if(encrypt_and_sign(msg, enc) == -1){
+            printf("Usage: balance\n");
+            return;
+        };
+        atm_send(atm, enc, sizeof(enc));
+        atm_recv(atm, recv, ENC_LEN);
+        if(decrypt_and_verify(recv,dec) == -1){
+            printf("Usage: balance\n");
+            return;
+        }
+
+        if(strlen(dec) > 10){
+            printf("Usage: balance\n");
+            return;
+        }
+
+        sscanf(dec, "%s", resp);
+
+        if(strcmp(resp, "invalid") == 0 || strcmp(resp, "une") == 0){
+            printf("Usage: balance\n");
+            return;
+        }
+
+        printf("$%d", resp);
+        return;
 
     } else if (strcmp(arg1, "end-session") == 0){
+        if(atm->session_started == 0){
+            printf("No user logged in\n");
+            return;
+        }
 
+        memset(atm->username, 0x00, 251);
+        memset(atm->pin, 0x00, 5);
+        atm->session_started = 0;
+
+        printf("User logged out\n");
     } else {
         printf("Invalid command\n");
         return;
@@ -174,10 +370,21 @@ int username_is_valid(char *username){
     return 1;
 }
 
-int encrypt_and_sign(char *msg, char enc[]){
-
+int contains_nondigit(char *str){
+    int i;
+    for(i = 0; i > strlen(str); i++){
+        if(str[i] > 9){
+            return -1;
+        }
+    }
+    return 0;
 }
 
-int decrypt_and_verify(char *enc, char dec[]){
-    
+int encrypt_and_sign(char *msg, char *enc){
+    //place holder
+    strncpy(enc, msg);
+}
+
+int decrypt_and_verify(char *enc, char *dec){
+    strncpy(dec, enc);
 }
