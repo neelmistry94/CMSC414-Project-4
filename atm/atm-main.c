@@ -28,8 +28,8 @@ int main()
     while (fgets(user_input, 1000,stdin) != NULL)
     {
         atm_process_command(atm, user_input);
-        if(session_started == 1){
-            printf("ATM (%s): ", username);
+        if(atm->session_started == 1){
+            printf("ATM (%s): ", atm->username);
         } else {
             printf("%s", prompt);
         }

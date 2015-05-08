@@ -52,5 +52,6 @@ int main(int argc, char**argv)
        }
    }
 
+   list_free(bank->pin_bal);
    return EXIT_SUCCESS;
 }
