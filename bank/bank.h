@@ -15,10 +15,11 @@
 #ifndef __BANK_H__
 #define __BANK_H__
 
+#include "list.h"
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <stdio.h>
+
 
 typedef struct _Bank
 {
@@ -29,7 +30,7 @@ typedef struct _Bank
 
     // Protocol state
     // TODO add more, as needed
-    struct List pin_bal;
+    List *pin_bal;
 } Bank;
 
 Bank* bank_create();
@@ -47,6 +48,7 @@ void send_invalid();
 void send_s();
 void send_ng();
 void send_une();
+void send_ce();
 void send_bal(char *bal);
 int get_bal(char *username, char *pin);
 int decrypt_and_verify(char* msg, char dec[]);

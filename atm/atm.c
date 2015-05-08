@@ -4,12 +4,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define MAX_ARG1_SIZE = 14 //b e g i n - s e s s i o n + 1 for null char
-#define MAX_ARG2_SIZE= 251; //+1 for null char
-#define MAX_LINE_SIZE = 1001;
-#define ENC_LEN = 2048;
-#define MAX_RSP_SIZE = 11;
-#define MAX_MSG_SIZE = 300;
+#define MAX_ARG1_SIZE 14 //b e g i n - s e s s i o n + 1 for null char
+#define MAX_ARG2_SIZE 251 //+1 for null char
+#define MAX_LINE_SIZE 1001
+#define ENC_LEN 2048
+#define MAX_RSP_SIZE 11
+#define MAX_MSG_SIZE 300
 
 ATM* atm_create()
 {
@@ -48,8 +48,8 @@ void atm_free(ATM *atm)
     if(atm != NULL)
     {
         atm->session_started = 0;
-        atm->pin = NULL;
-        atm->username = NULL;
+        memset(atm->username, 0x00, 251);
+        memset(atm->pin, 0x00, 5);
         close(atm->sockfd);
         free(atm);
     }
@@ -77,9 +77,9 @@ void atm_process_command(ATM *atm, char *command)
     char arg2temp[MAX_LINE_SIZE];
 
     memset(arg1, 0x00, MAX_ARG1_SIZE);
-    memset(arg1temp; 0x00, MAX_LINE_SIZE);
+    memset(arg1temp, 0x00, MAX_LINE_SIZE);
     memset(arg2, 0x00, MAX_ARG2_SIZE);
-    memset(arg2temp; 0x00, MAX_LINE_SIZE);
+    memset(arg2temp, 0x00, MAX_LINE_SIZE);
 
     sscanf(command, "%s %s", arg1temp, arg2temp);
     if(strlen(arg1temp) > 13){
@@ -273,7 +273,7 @@ void atm_process_command(ATM *atm, char *command)
         }
 
         if(strcmp(resp, "s") == 0){
-            printf("$%d dispensed", arg2);
+            printf("$%s dispensed", arg2);
             return;
         }
 
@@ -318,7 +318,7 @@ void atm_process_command(ATM *atm, char *command)
             return;
         }
 
-        printf("$%d", resp);
+        printf("$%s", resp);
         return;
 
     } else if (strcmp(arg1, "end-session") == 0){
@@ -382,9 +382,11 @@ int contains_nondigit(char *str){
 
 int encrypt_and_sign(char *msg, char *enc){
     //place holder
-    strncpy(enc, msg);
+    strncpy(enc, msg, strlen(msg));
+return 0;
 }
 
 int decrypt_and_verify(char *enc, char *dec){
-    strncpy(dec, enc);
+    strncpy(dec, enc, strlen(enc));
+return 0;
 }

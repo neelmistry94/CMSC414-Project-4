@@ -1,18 +1,18 @@
 #include "bank.h"
 #include "ports.h"
-#include "list.h"
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <limits.h>
 #include <openssl/sha.h>
+#include <stdio.h>
 
-#define MAX_ARG1_SIZE = 12; //11 + 1 for Null
-#define MAX_ARG2_SIZE = 251; //250 + Null character
-#define MAX_OTHER_ARG_SIZE = 10; //9 + Null
-#define MAX_LINE_SIZE = 1001; //10000 + Null
-#define ENC_LEN = 2048;
-#define MAX_INC_MSG = 300;
+#define MAX_ARG1_SIZE 12 //11 + 1 for Null
+#define MAX_ARG2_SIZE 251 //250 + Null character
+#define MAX_OTHER_ARG_SIZE 10 //9 + Null
+#define MAX_LINE_SIZE 1001 //10000 + Null
+#define ENC_LEN 2048
+#define MAX_INC_MSG 300
 
 Bank* bank_create()
 {
@@ -81,16 +81,16 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
  
 
     memset(arg1, 0x00, MAX_ARG1_SIZE);
-    memset(arg1temp; 0x00, MAX_LINE_SIZE);
+    memset(arg1temp, 0x00, MAX_LINE_SIZE);
     memset(arg2, 0x00, MAX_ARG2_SIZE);
-    memset(arg2temp; 0x00, MAX_LINE_SIZE);
+    memset(arg2temp, 0x00, MAX_LINE_SIZE);
     memset(arg3, 0x00, MAX_OTHER_ARG_SIZE);
-    memset(arg3temp; 0x00, MAX_LINE_SIZE);
+    memset(arg3temp, 0x00, MAX_LINE_SIZE);
     memset(arg4, 0x00, MAX_OTHER_ARG_SIZE);
-    memset(arg4temp; 0x00, MAX_LINE_SIZE);
+    memset(arg4temp, 0x00, MAX_LINE_SIZE);
 
     //parse first command
-    if(strlen(command) > MAX_LINE_SIZE){
+    if(strlen(command) >= MAX_LINE_SIZE){
         printf("Invalid command\n");
         return;
     }
@@ -167,7 +167,7 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
         unsigned char hash[SHA_DIGEST_LENGTH];
         size_t hlength = sizeof(arg3);
        //REMEMBER TO USE A SALT
-        SHA1(arg3, hlength, hash);
+        SHA1((unsigned char *)arg3, hlength, hash);
 
         //just concanting username and extension
         char *ext = ".card";
@@ -185,16 +185,16 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
         }
 
         //put hashed pin in file
-        fprinf(card, "%s", hash);
+        fprintf(card, "%s", hash);
 
         //close
         fclose(card);
 
         //make balance an int
-        int bal = strtol(arg4);
+        int bal = strtol(arg4, NULL, 10);
 
         //add to hash to pin->balance list
-        list_add(bank->pin_bal, hash, bal);
+        list_add(bank->pin_bal,(char *) hash, &bal);
 
         printf("Created user %s\n", arg2);
         return;
@@ -229,7 +229,7 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
                 if(contains_nondigit(arg3temp) == 0){
                     printf("Usage: deposit <user-name> <amt>\n");
                     return;
-                } else if(strlen(arg3temp) > 10 || strtol(arg3temp) > INT_MAX){
+                } else if(strlen(arg3temp) > 10 || strtol(arg3temp, NULL, 10) > INT_MAX){
                     printf("Too rich for this program\n");
                     return;
                 }
@@ -244,8 +244,8 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
             return;    
         }
 
-        int curr_bal = (int) *(list_find(bank->pin_bal, arg2));
-        int amt = strtol(arg3);
+        int curr_bal = *((int *) list_find(bank->pin_bal, arg2));
+        int amt = strtol(arg3, NULL, 10);
         long new_bal = amt + curr_bal;
         if(new_bal > INT_MAX){
             printf("Too rich for this program\n");
@@ -253,13 +253,13 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
         }
 
         //update balance
-        list_add(bank->pin_bal, arg2, new_bal);
+        list_add(bank->pin_bal, arg2, &new_bal);
 
         printf("$%s added to %s's account\n", arg3, arg2);
         return;
    
     } else  if (strcmp(arg1, "balance") == 0) {
-        if(arg2temp == NULL || username_is_valid == -1){
+        if(arg2temp == NULL || username_is_valid(arg2temp) == -1){
             printf("Usage: balance <user-name>\n");
             return;
         }
@@ -281,7 +281,7 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
             return;
         }
 
-        int curr_bal = (int) *(list_find(bank->pin_bal, arg2));
+        int curr_bal = *((int*)(list_find(bank->pin_bal, arg2)));
         printf("$%d\n", curr_bal);
         return;
 
@@ -307,13 +307,12 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
     //dec is the actual command
     char arg1[2]; //first command is always a single character
     char arg1temp[MAX_INC_MSG];
-    char arg2[251]; //secnod is always username
+    char arg2[251]; //second is always username
     char arg2temp[MAX_INC_MSG];
-    char arg3[5] //third arg always pin
-    char arg3temp[MAX_INC_MSG];  
-    char arg4[11]; //4 can only be amt, max 10 chars\
+    char arg3[5]; //third arg always pin
+    char arg3temp[MAX_INC_MSG];
+    char arg4[11]; //4 can only be amt, max 10 chars
     char arg4temp[MAX_INC_MSG];
-
 
     memset(arg1, 0x00, 2);
     memset(arg1temp, 0x00, MAX_INC_MSG);
@@ -404,7 +403,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
         strncpy(arg4, arg4temp, strlen(arg4temp));
 
-        long temp = strtol(arg4);
+        long temp = strtol(arg4, NULL, 10);
         if(temp < 0 || temp > INT_MAX){
             send_ng(); //ng = insufficient funds for here
             return;
@@ -421,9 +420,9 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
         unsigned char hash[SHA_DIGEST_LENGTH];
         size_t plength = sizeof(arg3);
         //REMEMBER TO USE A SALT
-        SHA1(arg3, plength, hash);
+        SHA1((unsigned char *) arg3, plength, hash);
 
-        list_add(bank->pin_bal, hash, new_bal);
+        list_add(bank->pin_bal, (char *)hash, &new_bal);
 
         send_s();
         return;
@@ -484,10 +483,10 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
         unsigned char hash[SHA_DIGEST_LENGTH];
         size_t plength = sizeof(arg3);
         //REMEMBER TO USE A SALT
-        SHA1(arg3, plength, hash);
+        SHA1((unsigned char *)arg3, plength, hash);
 
         //PIN is ONLY valid where .card file and list record match
-        int found = list_find(bank->pin_bal, hash);
+        int* found = (int *)list_find(bank->pin_bal, (char *)hash);
         if(found == NULL){
             send_ng();
             return;
@@ -510,7 +509,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
         fclose(card);
         //not sure can use strcmp to compare hashes
-        if(strcmp(hash, line) == 0){
+        if(memcmp(hash, line, sizeof(line)) == 0){
             send_s();
         } else {
             send_ng();

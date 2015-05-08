@@ -35,5 +35,9 @@ void atm_free(ATM *atm);
 ssize_t atm_send(ATM *atm, char *data, size_t data_len);
 ssize_t atm_recv(ATM *atm, char *data, size_t max_data_len);
 void atm_process_command(ATM *atm, char *command);
+int username_is_valid(char *username);
+int contains_nondigit(char *str);
+int encrypt_and_sign(char *msg, char *enc);
+int decrypt_and_verify(char *enc, char *dec);
 
 #endif
