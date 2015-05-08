@@ -4,7 +4,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <stdio.h>
 #include <limits.h>
 #include <openssl/sha.h>
 
@@ -13,6 +12,7 @@
 #define MAX_OTHER_ARG_SIZE = 10; //9 + Null
 #define MAX_LINE_SIZE = 1001; //10000 + Null
 #define ENC_LEN = 2048;
+#define MAX_INC_MSG = 300;
 
 Bank* bank_create()
 {
@@ -97,6 +97,11 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
 
     sscanf(command, "%s %s %s %s", arg1temp, arg2temp, arg3temp, arg4temp);
     
+    if(arg1temp == NULL){
+        printf("Invalid command\n");
+        return;
+    }
+
     //max arg1 length is 10 (c r e a t e - u s e r)
     if(strlen(arg1temp) > 10){
         printf("Invalid command\n");
@@ -161,14 +166,8 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
         //hash pin make sure using -lcrypto in makefile
         unsigned char hash[SHA_DIGEST_LENGTH];
         size_t hlength = sizeof(arg3);
-        int times = 8;
        //REMEMBER TO USE A SALT
         SHA1(arg3, hlength, hash);
-        while(times > 0){
-            hlength = sizeof(hash);
-            SHA1(hash, hlength, hash);
-            times--;
-        }
 
         //just concanting username and extension
         char *ext = ".card";
@@ -297,18 +296,232 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
     //decrypt and verify arrival
     char dec[ENC_LEN];
     char enc[ENC_LEN];
-    char *inv = "invalid";
     memset(dec, 0x00, ENC_LEN);
+    memset(enc, 0x00, ENC_LEN);
+
     if(decrypt_and_verify(command, dec) == -1){
-        if(encrypt_and_sign("invalid", enc) == -1){
-            //should never happen
-            printf("FATAL ERROR\n");
-        }
-        bank_send(bank, enc, sizeof(enc));
+        send_invalid();
         return;
     }
 
     //dec is the actual command
+    char arg1[2]; //first command is always a single character
+    char arg1temp[MAX_INC_MSG];
+    char arg2[251]; //secnod is always username
+    char arg2temp[MAX_INC_MSG];
+    char arg3[5] //third arg always pin
+    char arg3temp[MAX_INC_MSG];  
+    char arg4[11]; //4 can only be amt, max 10 chars\
+    char arg4temp[MAX_INC_MSG];
+
+
+    memset(arg1, 0x00, 2);
+    memset(arg1temp, 0x00, MAX_INC_MSG);
+    memset(arg2, 0x00, 251);
+    memset(arg2temp, 0x00, MAX_INC_MSG);
+    memset(arg3, 0x00, 5);
+    memset(arg3temp, 0x00, MAX_INC_MSG);
+    memset(arg4, 0x00, 11);
+    memset(arg4temp, 0x00, MAX_INC_MSG);
+
+    sscanf(dec, "%s %s %s", arg1temp, arg2temp, arg3temp);
+    if(arg1temp == NULL){
+        send_invalid();
+        return;
+    }
+
+    if(strlen(arg1temp) > 1){
+        send_invalid();
+        return;
+    }
+
+    strncpy(arg1, arg1temp, strlen(arg1temp));
+
+    if(arg2temp == NULL){
+        send_invalid();
+        return;
+    }
+
+    if(strlen(arg2temp) > 250){
+        send_invalid();
+        return;
+    }
+
+    strncpy(arg2, arg2temp, strlen(arg2temp));
+
+    if(username_is_valid(arg2) == -1){
+        send_invalid();
+        return;
+    }
+
+    if(strcmp(arg1, "?") == 0){ // "? username" -> does user exist
+
+        if(user_exists(arg2) != -1){
+            send_s();
+        } else {
+            send_ng();
+        }
+        return;
+
+    } else if (strcmp(arg1, "w") == 0){ // "w username pin amt" -> withdrawal
+
+        if(user_exists(arg2) == -1){
+            send_une();
+            return;
+        }
+
+        if(arg3temp == NULL){
+            send_invalid();
+            return;
+        }
+
+        if(strlen(arg3temp) > 4){
+            send_invalid();
+            return;
+        }
+
+        if(contains_nondigit(arg3temp) == 0){
+            send_invalid();
+            return;
+        }
+
+        strncpy(arg3, arg3temp, strlen(arg3temp));
+
+        if(arg4temp == NULL){
+            send_invalid();
+            return;
+        }
+
+        if(strlen(arg4temp) > 11){
+            send_invalid();
+            return;
+        }
+
+        if(contains_nondigit(arg4temp) == 0){
+            send_invalid();
+            return;
+        }
+
+        strncpy(arg4, arg4temp, strlen(arg4temp));
+
+        long temp = strtol(arg4);
+        if(temp < 0 || temp > INT_MAX){
+            send_ng(); //ng = insufficient funds for here
+            return;
+        }
+
+        int amt = temp;
+        int curr_bal = get_bal(arg2, arg3);
+        int new_bal = amt - curr_bal;
+        if(new_bal < 0){
+            send_ng();
+            return;
+        }
+
+        unsigned char hash[SHA_DIGEST_LENGTH];
+        size_t plength = sizeof(arg3);
+        //REMEMBER TO USE A SALT
+        SHA1(arg3, plength, hash);
+
+        list_add(bank->pin_bal, hash, new_bal);
+
+        send_s();
+        return;
+
+    } else if (strcmp(arg1, "b") == 0){ // "b username pin" -> balance of user
+        if(user_exists(arg2) == -1){
+            send_une();
+            return;
+        }
+
+        if(arg3temp == NULL){
+            send_invalid();
+            return;
+        }
+
+        if(strlen(arg3temp) > 4){
+            send_invalid();
+            return;
+        }
+
+        if(contains_nondigit(arg3temp) == 0){
+            send_invalid();
+            return;
+        }
+
+        strncpy(arg3, arg3temp, strlen(arg3temp));
+
+        int bal = get_bal(arg2, arg3);
+        char balstr[11];
+        memset(balstr, 0x00, 11);
+        sprintf(balstr, "%d", bal);
+        send_bal(balstr);
+        return;
+
+    } else if (strcmp(arg1, "p") == 0){ // p username pin -> is valid pin?
+        if(user_exists(arg2) == -1){
+            send_une();
+            return;
+        }
+
+        if(arg3temp == NULL){
+            send_invalid();
+            return;
+        }
+
+        if(strlen(arg3temp) > 4){
+            send_invalid();
+            return;
+        }
+
+        if(contains_nondigit(arg3temp) == 0){
+            send_invalid();
+            return;
+        }
+
+        strncpy(arg3, arg3temp, strlen(arg3temp));
+
+        unsigned char hash[SHA_DIGEST_LENGTH];
+        size_t plength = sizeof(arg3);
+        //REMEMBER TO USE A SALT
+        SHA1(arg3, plength, hash);
+
+        //PIN is ONLY valid where .card file and list record match
+        int found = list_find(bank->pin_bal, hash);
+        if(found == NULL){
+            send_ng();
+            return;
+        }
+
+        char *ext = ".card";
+        int ufilelen = strlen(arg2) + 6; //5 = . c a r d and + 1 for null
+        char userfile[ufilelen]; //5 = . c a r d
+        memset(userfile, 0x00, ufilelen);
+        strncpy(userfile, arg2, strlen(arg2));
+        strncat(userfile, ext, 5);
+        FILE *card = fopen(userfile, "r");
+        if(card == NULL){
+            send_ce();
+            return;
+        }
+
+        char line[SHA_DIGEST_LENGTH];
+        fgets(line, SHA_DIGEST_LENGTH, card);
+
+        fclose(card);
+        //not sure can use strcmp to compare hashes
+        if(strcmp(hash, line) == 0){
+            send_s();
+        } else {
+            send_ng();
+        }
+        return;
+
+    } else {
+        send_invalid();
+        return;
+    }
+
 
     // TODO: Implement the bank side of the ATM-bank protocol
 
@@ -397,17 +610,116 @@ int contains_nondigit(char *str){
     return 0;
 }
 
+//send "invalid" message
+void send_invalid(){
+    char enc[ENC_LEN];
+    memset(enc, 0x00, ENC_LEN);
+    if(encrypt_and_sign("invalid", enc) == -1){
+        //should never happen
+        printf("FATAL ERROR\n");
+    }
+    bank_send(bank, enc, sizeof(enc));
+    return; 
+
+}
+
+//send "s" (success) message
+void send_s(){
+    char enc[ENC_LEN];
+    memset(enc, 0x00, ENC_LEN);
+    if(encrypt_and_sign("s", enc) == -1){
+        //should never happen
+        printf("FATAL ERROR\n");
+    } 
+    bank_send(bank, enc, sizeof(enc));
+    return;  
+} 
+
+///send "ng" (no good) message
+void send_ng(){
+    char enc[ENC_LEN];
+    memset(enc, 0x00, ENC_LEN);
+    if(encrypt_and_sign("ng", enc) == -1){
+        //should never happen
+        printf("FATAL ERROR\n");
+    } 
+    bank_send(bank, enc, sizeof(enc));
+    return; 
+}
+
+//send "une" (user no exist) message
+void send_une(){
+    char enc[ENC_LEN];
+    memset(enc, 0x00, ENC_LEN);
+    if(encrypt_and_sign("une", enc) == -1){
+        //should never happen
+        printf("FATAL ERROR\n");
+    } 
+    bank_send(bank, enc, sizeof(enc));
+    return; 
+}
+
+//send "ce" (card read error) message
+void send_ce(){
+    char enc[ENC_LEN];
+    memset(enc, 0x00, ENC_LEN);
+    if(encrypt_and_sign("ce", enc) == -1){
+        //should never happen
+        printf("FATAL ERROR\n");
+    } 
+    bank_send(bank, enc, sizeof(enc));
+    return; 
+}
+
+void send_bal(char *bal){
+    char enc[ENC_LEN];
+    memset(enc, 0x00, ENC_LEN);
+    if(encrypt_and_sign(bal, enc) == -1){
+        //should never happen
+        printf("FATAL ERROR\n");
+    } 
+    bank_send(bank, enc, sizeof(enc));
+    return; 
+}
+
+//-1 if failed, 0 and higher got it
+int get_bal(char *username, char *pin){
+   if(username_is_valid(username) == -1 || user_exists(username) == -1){
+        return -1;
+   } 
+    //hash pin make sure using -lcrypto in makefile
+    unsigned char hash[SHA_DIGEST_LENGTH];
+    size_t plength = sizeof(pin);
+    //REMEMBER TO USE A SALT
+    SHA1(pin, plength, hash);
+
+    int bal = (int) *(list_find(bank->pin_bal, hash));
+    if(bal == NULL){
+        return -1;
+    } else {
+        return bal;
+    }
+}
+
 //-1 if failed to decrypt or verify
-//takes in msg and decrypts it and verifies it's certificate(signature) as well
-/*stores decrypted msg in dec[]. If dec is not being stored, try changing the parameter
-to char *dec*/
+/*takes in msg and decrypts it and verifies it's certificate(signature) as well
+tores decrypted msg in dec[]. If dec is not being stored, try changing the parameter
+to char *dec
+read signature from temp file made
+ by otherside*/
 int decrypt_and_verify(char* msg, char dec[]){
 
 }
 
 //-1 if failed to encrypt and sign
 /*stores encrypted msg into enc[], and signs it as well.
+store signature in a temp file to be read by otherside
 */
 void encrypt_and_sign(char *msg, char enc[]){
+
+}
+
+//gets the salt for hashing
+void get_salt(char salt[]){
 
 }

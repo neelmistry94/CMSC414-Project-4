@@ -38,6 +38,20 @@ ssize_t bank_send(Bank *bank, char *data, size_t data_len);
 ssize_t bank_recv(Bank *bank, char *data, size_t max_data_len);
 void bank_process_local_command(Bank *bank, char *command, size_t len);
 void bank_process_remote_command(Bank *bank, char *command, size_t len);
+int username_is_valid(char *username);
+int user_exists(char *username);
+int valid_pin(char *pin);
+int valid_balanceamt_input(char *balance);
+int contains_nondigit(char *str);
+void send_invalid();
+void send_s();
+void send_ng();
+void send_une();
+void send_bal(char *bal);
+int get_bal(char *username, char *pin);
+int decrypt_and_verify(char* msg, char dec[]);
+void encrypt_and_sign(char *msg, char enc[]);
+void get_salt(char salt[]);
 
 #endif
 
