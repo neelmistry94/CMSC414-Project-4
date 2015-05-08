@@ -103,8 +103,8 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
         return;
     }
 
-    //max arg1 length is 10 (c r e a t e - u s e r)
-    if(strlen(arg1temp) > 10){
+    //max arg1 length is 11 (c r e a t e - u s e r)
+    if(strlen(arg1temp) > 11){
         printf("Invalid command\n");
         return;
     }

@@ -23,8 +23,8 @@ void getKeys(char *keys[]){
 	prikey = malloc(4098*sizeof(char));
 	pubkey = malloc(4098*sizeof(char));	
 
-	system("openssl genrsa -out private.pem 2048");
-	system("openssl rsa -in private.pem -out public.pem -pubout");
+	system("openssl genrsa -out private.pem 2048 &> /dev/null");
+	system("openssl rsa -in private.pem -out public.pem -pubout &> /dev/null");
 
 	pri = fopen("private.pem", "r");
 	pub = fopen("public.pem", "r");
