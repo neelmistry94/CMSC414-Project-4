@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <limits.h>
 #include <openssl/sha.h>
-#include <stdio.h>
 
 #define MAX_ARG1_SIZE 12 //11 + 1 for Null
 #define MAX_ARG2_SIZE 251 //250 + Null character
@@ -50,6 +49,8 @@ void bank_free(Bank *bank)
 {
     if(bank != NULL)
     {
+        fclose(bank->init);
+        list_free(bank->pin_bal);
         close(bank->sockfd);
         free(bank);
     }

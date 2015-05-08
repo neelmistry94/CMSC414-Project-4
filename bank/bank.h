@@ -19,6 +19,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <stdio.h>
 
 
 typedef struct _Bank
@@ -31,6 +32,7 @@ typedef struct _Bank
     // Protocol state
     // TODO add more, as needed
     List *pin_bal;
+    File *init;
 } Bank;
 
 Bank* bank_create();

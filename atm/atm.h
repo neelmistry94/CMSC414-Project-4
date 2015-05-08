@@ -28,6 +28,7 @@ typedef struct _ATM
     int session_started; //0 no, 1 yes //7 chars from ATM (): and 250 from max username + 1 for null
 	char username[251]; //+1 for null
 	char pin[5];
+	File *init;
 } ATM;
 
 ATM* atm_create();

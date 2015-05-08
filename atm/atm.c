@@ -47,6 +47,7 @@ void atm_free(ATM *atm)
 {
     if(atm != NULL)
     {
+        fclose(atm->init);
         atm->session_started = 0;
         memset(atm->username, 0x00, 251);
         memset(atm->pin, 0x00, 5);

@@ -20,11 +20,14 @@ int main(int argc, char**argv)
    char recvline[1000];
 
    Bank *bank = bank_create();
-
-    FILE *init = fopen("init.bank", "r");
-    if(init == NULL){
-        printf("Error opening bank initialization file\n");
-        return 64;
+    if(argv[1] == NULL){
+      printf("Error opening bank initialization file\n");
+      return 64;
+    }
+    bank->init = fopen(argv[1], "r");
+    if(bank->init == NULL){
+      printf("Error opening bank initialization file\n");
+      return 64;
     }
 
    printf("%s", prompt);
@@ -52,6 +55,6 @@ int main(int argc, char**argv)
        }
    }
 
-   list_free(bank->pin_bal);
+   bank_free(bank);
    return EXIT_SUCCESS;
 }

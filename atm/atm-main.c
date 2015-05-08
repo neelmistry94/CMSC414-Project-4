@@ -16,11 +16,16 @@ int main()
 
     ATM *atm = atm_create();
 
-    FILE *init = fopen("init.atm", "r");
-    if(init == NULL){
-        printf("Error opening ATM initialization file\n");
-        return 64;
+    if(argv[1] == NULL){
+      printf("Error opening bank initialization file\n");
+      return 64;
     }
+    atm->init = fopen(argv[1], "r");
+    if(atm->init == NULL){
+      printf("Error opening bank initialization file\n");
+      return 64;
+    }
+
 
     printf("%s", prompt);
     fflush(stdout);
@@ -35,5 +40,6 @@ int main()
         }
         fflush(stdout);
     }
+    atm_free(atm);
 	return EXIT_SUCCESS;
 }
