@@ -410,7 +410,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
         }
 
         int amt = temp;
-        int curr_bal = get_bal(arg2, arg3);
+        int curr_bal = get_bal(bank, arg2, arg3);
         int new_bal = amt - curr_bal;
         if(new_bal < 0){
             send_ng(bank);
@@ -450,11 +450,11 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
         strncpy(arg3, arg3temp, strlen(arg3temp));
 
-        int bal = get_bal(arg2, arg3);
+        int bal = get_bal(bank, arg2, arg3);
         char balstr[11];
         memset(balstr, 0x00, 11);
         sprintf(balstr, "%d", bal);
-        send_bal(balstr);
+        send_bal(bank, balstr);
         return;
 
     } else if (strcmp(arg1, "p") == 0){ // p username pin -> is valid pin?
@@ -682,7 +682,7 @@ void send_bal(Bank *bank, char *bal){
 }
 
 //-1 if failed, 0 and higher got it
-int get_bal(char *username, char *pin){
+int get_bal(Bank *bank, char *username, char *pin){
    if(username_is_valid(username) == -1 || user_exists(username) == -1){
         return -1;
    } 
@@ -690,13 +690,13 @@ int get_bal(char *username, char *pin){
     unsigned char hash[SHA_DIGEST_LENGTH];
     size_t plength = sizeof(pin);
     //REMEMBER TO USE A SALT
-    SHA1(pin, plength, hash);
+    SHA1((unsigned char *)pin, plength, hash);
 
-    int bal = (int) *(list_find(bank->pin_bal, hash));
+    int* bal = (int *) (list_find(bank->pin_bal, (char *) hash));
     if(bal == NULL){
         return -1;
     } else {
-        return bal;
+        return *bal;
     }
 }
 
@@ -705,7 +705,8 @@ int get_bal(char *username, char *pin){
 store signature in a temp file to be read by otherside
 */
 int encrypt_and_sign(char *msg, char *enc){
-    strncpy(enc, msg);
+    strncpy(enc, msg, strlen(msg));
+    return 0;
 }
 
 //-1 if failed to decrypt or verify
@@ -714,13 +715,14 @@ tores decrypted msg in dec[]. If dec is not being stored, try changing the param
 to char *dec
 read signature from temp file made
  by otherside*/
-void decrypt_and_verify(char *enc, char *dec){
+int decrypt_and_verify(char *enc, char *dec){
     //placeholder
-    strncpy(dec, enc);
+    strncpy(dec, enc, sizeof(enc));
+    return 0;
 }
 
 
 //gets the salt for hashing
-void get_salt(char salt[]){
+void get_salt(char *salt){
 
 }

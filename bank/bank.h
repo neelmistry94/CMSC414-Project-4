@@ -1,4 +1,4 @@
-Bank *bank/*
+/*
  * The Bank takes commands from stdin as well as from the ATM.  
  *
  * Commands from stdin be handled by bank_process_local_command.
@@ -51,9 +51,9 @@ void send_une(Bank *bank);
 void send_ce(Bank *bank);
 void send_bal(Bank *bank, char *bal);
 int get_bal(char *username, char *pin);
-int decrypt_and_verify(char* msg, char dec[]);
-void encrypt_and_sign(char *msg, char enc[]);
-void get_salt(char salt[]);
+int decrypt_and_verify(char* msg, char  *enc);
+int encrypt_and_sign(char *enc, char *dec);
+void get_salt(char *salt);
 
 #endif
 
