@@ -41,6 +41,7 @@ Bank* bank_create()
 
     //create bal_list
     bank->pin_bal = list_create();
+    bank->usr_pin = list_create();
 
     return bank;
 }
@@ -50,6 +51,7 @@ void bank_free(Bank *bank)
     if(bank != NULL)
     {
         fclose(bank->init);
+        list_free(bank->usr_pin);
         list_free(bank->pin_bal);
         close(bank->sockfd);
         free(bank);
@@ -194,8 +196,9 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
         //make balance an int
         int bal = strtol(arg4, NULL, 10);
 
-        //add to hash to pin->balance list
+        //add to hash to pin->balance list and user->pin list
         list_add(bank->pin_bal,(char *) hash, &bal);
+        list_add(bank->usr_pin, arg2, (char *) hash);
 
         printf("Created user %s\n", arg2);
         return;
@@ -245,7 +248,8 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
             return;    
         }
 
-        int curr_bal = *((int *) list_find(bank->pin_bal, arg2));
+        unsigned char hpin = *((unsigned char *) list_find(bank->usr_pin, arg2));
+        int curr_bal = *((int *) list_find(bank->pin_bal, hpin));
         int amt = strtol(arg3, NULL, 10);
         long new_bal = amt + curr_bal;
         if(new_bal > INT_MAX){
@@ -282,7 +286,8 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
             return;
         }
 
-        int curr_bal = *((int*)(list_find(bank->pin_bal, arg2)));
+        unsigned char hpin = *((unsigned char *) list_find(bank->usr_pin, arg2));
+        int curr_bal = *((int*)(list_find(bank->pin_bal, hpin)));
         printf("$%d\n", curr_bal);
         return;
 
