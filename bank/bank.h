@@ -32,7 +32,7 @@ typedef struct _Bank
     // Protocol state
     // TODO add more, as needed
     List *pin_bal;
-    File *init;
+    FILE *init;
 } Bank;
 
 Bank* bank_create();

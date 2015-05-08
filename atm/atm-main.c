@@ -10,7 +10,7 @@
 
 static const char prompt[] = "ATM: ";
 
-int main()
+int main(int argc, char**argv)
 {
     char user_input[1000];
 
