@@ -580,7 +580,7 @@ int valid_pin(char *pin){
         return -1;
     }
 
-    int d = strtol(pin, NULL, 10);
+    long d = strtol(pin, NULL, 10);
     if (d < 0 || d > 9999){
         return -1;
     }
@@ -593,7 +593,7 @@ int valid_balanceamt_input(char *balance){
         return -1;
     }
 
-    int d = strtol(balance, NULL, 10);
+    long d = strtol(balance, NULL, 10);
     if( d < 0 || d > INT_MAX){
         return -1;
     }
@@ -602,7 +602,7 @@ int valid_balanceamt_input(char *balance){
 
 int contains_nondigit(char *str){
     int i;
-    for(i = 0; i > strlen(str); i++){
+    for(i = 0; i < strlen(str); i++){
         if(str[i] > 9){
             return -1;
         }

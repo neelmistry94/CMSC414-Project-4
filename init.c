@@ -72,6 +72,8 @@ int main(int argc, char**argv){
    char bankExt[] = ".bank";
    int i, random;
    
+   //delete any old files
+   system("cd .. && make reset &> /dev/null");
    
    //check if there is only one argument
    if(argc != 2){
