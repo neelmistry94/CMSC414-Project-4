@@ -300,7 +300,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
     memset(enc, 0x00, ENC_LEN);
 
     if(decrypt_and_verify(command, dec) == -1){
-        send_invalid();
+        send_invalid(bank);
         return;
     }
 
@@ -325,79 +325,79 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
     sscanf(dec, "%s %s %s %s", arg1temp, arg2temp, arg3temp, arg4temp);
     if(arg1temp == NULL){
-        send_invalid();
+        send_invalid(bank);
         return;
     }
 
     if(strlen(arg1temp) > 1){
-        send_invalid();
+        send_invalid(bank);
         return;
     }
 
     strncpy(arg1, arg1temp, strlen(arg1temp));
 
     if(arg2temp == NULL){
-        send_invalid();
+        send_invalid(bank);
         return;
     }
 
     if(strlen(arg2temp) > 250){
-        send_invalid();
+        send_invalid(bank);
         return;
     }
 
     strncpy(arg2, arg2temp, strlen(arg2temp));
 
     if(username_is_valid(arg2) == -1){
-        send_invalid();
+        send_invalid(bank);
         return;
     }
 
     if(strcmp(arg1, "?") == 0){ // "? username" -> does user exist
 
         if(user_exists(arg2) != -1){
-            send_s();
+            send_s(bank);
         } else {
-            send_ng();
+            send_ng(bank);
         }
         return;
 
     } else if (strcmp(arg1, "w") == 0){ // "w username pin amt" -> withdrawal
 
         if(user_exists(arg2) == -1){
-            send_une();
+            send_une(bank);
             return;
         }
 
         if(arg3temp == NULL){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
         if(strlen(arg3temp) > 4){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
         if(contains_nondigit(arg3temp) == 0){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
         strncpy(arg3, arg3temp, strlen(arg3temp));
 
         if(arg4temp == NULL){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
         if(strlen(arg4temp) > 11){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
         if(contains_nondigit(arg4temp) == 0){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
@@ -405,7 +405,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
         long temp = strtol(arg4, NULL, 10);
         if(temp < 0 || temp > INT_MAX){
-            send_ng(); //ng = insufficient funds for here
+            send_ng(bank); //ng = insufficient funds for here
             return;
         }
 
@@ -413,7 +413,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
         int curr_bal = get_bal(arg2, arg3);
         int new_bal = amt - curr_bal;
         if(new_bal < 0){
-            send_ng();
+            send_ng(bank);
             return;
         }
 
@@ -424,27 +424,27 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
         list_add(bank->pin_bal, (char *)hash, &new_bal);
 
-        send_s();
+        send_s(bank);
         return;
 
     } else if (strcmp(arg1, "b") == 0){ // "b username pin" -> balance of user
         if(user_exists(arg2) == -1){
-            send_une();
+            send_une(bank);
             return;
         }
 
         if(arg3temp == NULL){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
         if(strlen(arg3temp) > 4){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
         if(contains_nondigit(arg3temp) == 0){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
@@ -459,22 +459,22 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
     } else if (strcmp(arg1, "p") == 0){ // p username pin -> is valid pin?
         if(user_exists(arg2) == -1){
-            send_une();
+            send_une(bank);
             return;
         }
 
         if(arg3temp == NULL){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
         if(strlen(arg3temp) > 4){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
         if(contains_nondigit(arg3temp) == 0){
-            send_invalid();
+            send_invalid(bank);
             return;
         }
 
@@ -488,7 +488,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
         //PIN is ONLY valid where .card file and list record match
         int* found = (int *)list_find(bank->pin_bal, (char *)hash);
         if(found == NULL){
-            send_ng();
+            send_ng(bank);
             return;
         }
 
@@ -500,7 +500,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
         strncat(userfile, ext, 5);
         FILE *card = fopen(userfile, "r");
         if(card == NULL){
-            send_ce();
+            send_ce(bank);
             return;
         }
 
@@ -510,14 +510,14 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
         fclose(card);
         //not sure can use strcmp to compare hashes
         if(memcmp(hash, line, sizeof(line)) == 0){
-            send_s();
+            send_s(bank);
         } else {
-            send_ng();
+            send_ng(bank);
         }
         return;
 
     } else {
-        send_invalid();
+        send_invalid(bank);
         return;
     }
 
@@ -610,13 +610,12 @@ int contains_nondigit(char *str){
 }
 
 //send "invalid" message
-void send_invalid(){
+void send_invalid(Bank *bank){
     char enc[ENC_LEN];
     memset(enc, 0x00, ENC_LEN);
     if(encrypt_and_sign("invalid", enc) == -1){
         //should never happen
-        printf("FATAL ERROR\n");
-        EXIT_FAILURE;
+         return;       
     }
     bank_send(bank, enc, sizeof(enc));
     return; 
@@ -624,64 +623,59 @@ void send_invalid(){
 }
 
 //send "s" (success) message
-void send_s(){
+void send_s(Bank *bank){
     char enc[ENC_LEN];
     memset(enc, 0x00, ENC_LEN);
     if(encrypt_and_sign("s", enc) == -1){
         //should never happen
-        printf("FATAL ERROR\n");
-        EXIT_FAILURE;
+        return;
     } 
     bank_send(bank, enc, sizeof(enc));
     return;  
 } 
 
 ///send "ng" (no good) message
-void send_ng(){
+void send_ng(Bank *bank){
     char enc[ENC_LEN];
     memset(enc, 0x00, ENC_LEN);
     if(encrypt_and_sign("ng", enc) == -1){
         //should never happen
-        printf("FATAL ERROR\n");
-        EXIT_FAILURE;
+        return;
     } 
     bank_send(bank, enc, sizeof(enc));
     return; 
 }
 
 //send "une" (user no exist) message
-void send_une(){
+void send_une(Bank *bank){
     char enc[ENC_LEN];
     memset(enc, 0x00, ENC_LEN);
     if(encrypt_and_sign("une", enc) == -1){
         //should never happen
-        printf("FATAL ERROR\n");
-        EXIT_FAILURE;
+        return;
     } 
     bank_send(bank, enc, sizeof(enc));
     return; 
 }
 
 //send "ce" (card read error) message
-void send_ce(){
+void send_ce(Bank *bank){
     char enc[ENC_LEN];
     memset(enc, 0x00, ENC_LEN);
     if(encrypt_and_sign("ce", enc) == -1){
         //should never happen
-        printf("FATAL ERROR\n");
-        EXIT_FAILURE;
+        return;
     } 
     bank_send(bank, enc, sizeof(enc));
     return; 
 }
 
-void send_bal(char *bal){
+void send_bal(Bank *bank, char *bal){
     char enc[ENC_LEN];
     memset(enc, 0x00, ENC_LEN);
     if(encrypt_and_sign(bal, enc) == -1){
         //should never happen
-        printf("FATAL ERROR\n");
-        EXIT_FAILURE;
+        return;
     } 
     bank_send(bank, enc, sizeof(enc));
     return; 
