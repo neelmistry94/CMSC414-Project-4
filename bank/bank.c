@@ -8,7 +8,7 @@
 
 #define MAX_ARG1_SIZE 12 //11 + 1 for Null
 #define MAX_ARG2_SIZE 251 //250 + Null character
-#define MAX_OTHER_ARG_SIZE 10 //9 + Null
+#define MAX_OTHER_ARG_SIZE 12 //9 + Null
 #define MAX_LINE_SIZE 1001 //10000 + Null
 #define ENC_LEN 2048
 #define MAX_INC_MSG 300
@@ -587,13 +587,16 @@ int valid_pin(char *pin){
     return 0;
 }
 
-// 0 true, 1 false
+// 0 true, -1 false
 int valid_balanceamt_input(char *balance){
     if(contains_nondigit(balance) == 0){
         return -1;
     }
 
     long d = strtol(balance, NULL, 10);
+    if( d == INT_MAX && strcmp(d, "2147483647") != 0){
+        return -1;//means balance was put down to MAX, so it's too much.
+    }
     if( d < 0 || d > INT_MAX){
         return -1;
     }
@@ -603,11 +606,11 @@ int valid_balanceamt_input(char *balance){
 int contains_nondigit(char *str){
     int i;
     for(i = 0; i < strlen(str); i++){
-        if(str[i] > 9){
-            return -1;
+        if(str[i] < 48 || str[i] > 57){
+            return 0;
         }
     }
-    return 0;
+    return -1;
 }
 
 //send "invalid" message
