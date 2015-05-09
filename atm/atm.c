@@ -38,7 +38,6 @@ ATM* atm_create()
     // TODO set up more, as needed
     atm->session_started = 0;
     memset(atm->username, 0x00, 251);
-    memset(atm->pin, 0x00, 5);
 
     return atm;
 }
@@ -50,7 +49,6 @@ void atm_free(ATM *atm)
         fclose(atm->init);
         atm->session_started = 0;
         memset(atm->username, 0x00, 251);
-        memset(atm->pin, 0x00, 5);
         close(atm->sockfd);
         free(atm);
     }
@@ -162,10 +160,20 @@ void atm_process_command(ATM *atm, char *command)
             return;
         }
 
-        char pin[5];
+        char pin[5], line[1000000];
+        memset(line, 0x00, 1000000);
         memset(pin, 0x00, 5);
         printf("PIN? ");
-        fgets(pin , 4, stdin);
+        fgets(line, 1000000, stdin);
+        if(strlen(line) != 4 && line[4] != '\n'){
+        	if(strlen(line) > 4){
+        		
+        	}
+            printf("Not authorized\n");
+            return;
+        }
+
+		strncpy(pin, line, 4);
 
         if(contains_nondigit(pin) == 0){
             printf("Not authorized\n");
@@ -215,7 +223,6 @@ void atm_process_command(ATM *atm, char *command)
         }
 
         strncpy(atm->username, arg2, strlen(arg2));
-        strncpy(atm->pin, pin, 4);
         atm->session_started = 1;
         return;
 
@@ -251,8 +258,6 @@ void atm_process_command(ATM *atm, char *command)
         strncpy(msg, "w ", 2);
         strncat(msg, atm->username, strlen(atm->username));
         strncat(msg, " ", 1);
-        strncat(msg, atm->pin, 4);
-        strncat(msg, " ", 1);
         strncat(msg, arg2, strlen(arg2));
 
         if(encrypt_and_sign(msg, enc) == -1){
@@ -284,7 +289,7 @@ void atm_process_command(ATM *atm, char *command)
         }
 
         if(strcmp(resp, "s") == 0){
-            printf("$%s dispensed", arg2);
+            printf("$%s dispensed\n", arg2);
             return;
         }
 
@@ -303,8 +308,6 @@ void atm_process_command(ATM *atm, char *command)
 
         strncpy(msg, "b ", 2);
         strncat(msg, atm->username, strlen(atm->username));
-        strncat(msg, " ", 1);
-        strncat(msg, atm->pin, 4);
 
         if(encrypt_and_sign(msg, enc) == -1){
             printf("Usage: balance\n");
@@ -329,7 +332,7 @@ void atm_process_command(ATM *atm, char *command)
             return;
         }
 
-        printf("$%s", resp);
+        printf("$%s\n", resp);
         return;
 
     } else if (strcmp(arg1, "end-session") == 0){
@@ -339,7 +342,6 @@ void atm_process_command(ATM *atm, char *command)
         }
 
         memset(atm->username, 0x00, 251);
-        memset(atm->pin, 0x00, 5);
         atm->session_started = 0;
 
         printf("User logged out\n");
@@ -383,12 +385,12 @@ int username_is_valid(char *username){
 
 int contains_nondigit(char *str){
     int i;
-    for(i = 0; i > strlen(str); i++){
-        if(str[i] > 9){
-            return -1;
+    for(i = 0; i < strlen(str); i++){
+        if(str[i] < 48 || str[i] > 57){
+            return 0;
         }
     }
-    return 0;
+    return -1;
 }
 
 int encrypt_and_sign(char *msg, char *enc){

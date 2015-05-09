@@ -27,6 +27,8 @@ typedef struct _List
 List* list_create();
 void list_free(List *list);
 void list_add(List *list, char *key, void *val);
+void list_add_char(List *list, char *key, char *val);
+void list_add_int(List *list, char *key, int *val);
 void* list_find(List *list, const char *key);
 void list_del(List *list, const char *key);
 uint32_t list_size(const List *list);

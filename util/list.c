@@ -20,6 +20,8 @@ void list_free(List *list)
         while(curr != NULL)
         {
             next = curr->next;
+            free(curr->key);
+            free(curr->val);
             free(curr);
             curr = next;
         }
@@ -61,6 +63,50 @@ void list_add(List *list, char *key, void *val)
     list->size++;
 }
 
+void list_add_char(List *list, char *key, char *val)
+{
+    // Allow duplicates
+    // assert(list_find(list, key) == NULL);
+
+    ListElem *elem = (ListElem*) malloc(sizeof(ListElem));
+    elem->key = malloc(strlen(key) + 1);
+    memcpy(elem->key, key, strlen(key) + 1);
+    //elem->key = key;
+    elem->val = malloc(strlen(val) + 1);
+    memcpy(elem->val, val, strlen(val) + 1);
+    //elem->val = val;
+    elem->next = NULL;
+
+    if(list->tail == NULL)
+        list->head = list->tail = elem;
+    else
+        list->tail->next = elem;
+
+    list->size++;
+}
+
+void list_add_int(List *list, char *key, int *val)
+{
+    // Allow duplicates
+    // assert(list_find(list, key) == NULL);
+
+    ListElem *elem = (ListElem*) malloc(sizeof(ListElem));
+    elem->key = malloc(strlen(key) + 1);
+    memcpy(elem->key, key, strlen(key) + 1);
+   // elem->key = key;
+    elem->val = malloc(sizeof(int));
+    memcpy(elem->val, val, sizeof(int));
+    //elem->val = val;
+    elem->next = NULL;
+
+    if(list->tail == NULL)
+        list->head = list->tail = elem;
+    else
+        list->tail->next = elem;
+
+    list->size++;
+}
+
 void list_del(List *list, const char *key)
 {
     // Remove the element with key 'key'
@@ -84,6 +130,8 @@ void list_del(List *list, const char *key)
 
             list->size--;
 
+			free(curr->key);
+			free(curr->val);
             free(curr);
             return;
         }

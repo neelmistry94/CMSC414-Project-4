@@ -169,8 +169,8 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
 
         /***MAKE .CARD***/
         //hash pin make sure using -lcrypto in makefile
-        unsigned char hash[SHA_DIGEST_LENGTH + 1];
-		memset(hash, 0x00, SHA_DIGEST_LENGTH + 1);
+        unsigned char hash[SHA_DIGEST_LENGTH];
+		memset(hash, 0x00, SHA_DIGEST_LENGTH);
         size_t hlength = sizeof(arg3);
        //REMEMBER TO USE A SALT
         SHA1((unsigned char *)arg3, hlength, hash);
@@ -200,9 +200,9 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
         int bal = strtol(arg4, NULL, 10);
 
         //add to hash to pin->balance list and user->pin list
-        list_add(bank->pin_bal, arg3, &bal);
-        list_add(bank->usr_pin, arg2, arg3);
-		list_add(bank->pin_usr, arg3, arg2);
+        list_add_int(bank->pin_bal, arg3, &bal);
+        list_add_char(bank->usr_pin, arg2, arg3);
+		list_add_char(bank->pin_usr, arg3, arg2);
 
         printf("Created user %s\n", arg2);
         return;
@@ -266,10 +266,11 @@ void bank_process_local_command(Bank *bank, char *command, size_t len)
              printf("Too rich for this program\n");
             return;          
         }
+        int nbint = (int) new_bal;
 
         //update balance
 		list_del(bank->pin_bal, pin);
-        list_add(bank->pin_bal, pin, &new_bal);
+        list_add_int(bank->pin_bal, pin, &nbint);
 
         printf("$%s added to %s's account\n", arg3, arg2);
         return;
@@ -318,6 +319,11 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
     if(decrypt_and_verify(command, dec) == -1){
         send_invalid(bank);
         return;
+    }
+    
+    if(strlen(dec) > 300){
+    	send_invalid(bank);
+    	return;
     }
 
     //dec is the actual command
@@ -370,7 +376,6 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
     }
 
     if(strcmp(arg1, "?") == 0){ // "? username" -> does user exist
-
         if(user_exists(arg2) != -1){
             send_s(bank);
         } else {
@@ -378,7 +383,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
         }
         return;
 
-    } else if (strcmp(arg1, "w") == 0){ // "w username pin amt" -> withdrawal
+    } else if (strcmp(arg1, "w") == 0){ // "w username amt" -> withdrawal
 
         if(user_exists(arg2) == -1){
             send_une(bank);
@@ -390,7 +395,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
             return;
         }
 
-        if(strlen(arg3temp) != 4){
+        if(strlen(arg3temp) > 11){
             send_invalid(bank);
             return;
         }
@@ -402,24 +407,7 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
         strncpy(arg3, arg3temp, strlen(arg3temp));
 
-        if(arg4temp == NULL || strlen(arg4temp) < 1){
-            send_invalid(bank);
-            return;
-        }
-
-        if(strlen(arg4temp) > 11){
-            send_invalid(bank);
-            return;
-        }
-
-        if(contains_nondigit(arg4temp) == 0){
-            send_invalid(bank);
-            return;
-        }
-
-        strncpy(arg4, arg4temp, strlen(arg4temp));
-
-        long temp = strtol(arg4, NULL, 10);
+        long temp = strtol(arg3, NULL, 10);
         if(temp < 0 || temp > INT_MAX){
             send_ng(bank); //ng = insufficient funds for here
             return;
@@ -427,40 +415,24 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
         int amt = temp;
         int curr_bal = get_bal(bank, arg2);
-        int new_bal = amt - curr_bal;
+        int new_bal = curr_bal - amt;
         if(new_bal < 0){
             send_ng(bank);
             return;
         }
-
-		list_del(bank->pin_bal, arg3);
-        list_add(bank->pin_bal, arg3, &new_bal);
+		
+		char *pin = list_find(bank->usr_pin, arg2);
+		list_del(bank->pin_bal, pin);
+        list_add_int(bank->pin_bal, pin, &new_bal);
 
         send_s(bank);
         return;
 
-    } else if (strcmp(arg1, "b") == 0){ // "b username pin" -> balance of user
+    } else if (strcmp(arg1, "b") == 0){ // "b username" -> balance of user
         if(user_exists(arg2) == -1){
             send_une(bank);
             return;
         }
-
-        if(arg3temp == NULL || strlen(arg3temp) < 1){
-            send_invalid(bank);
-            return;
-        }
-
-        if(strlen(arg3temp) != 4){
-            send_invalid(bank);
-            return;
-        }
-
-        if(contains_nondigit(arg3temp) == 0){
-            send_invalid(bank);
-            return;
-        }
-
-        strncpy(arg3, arg3temp, strlen(arg3temp));
 
         int bal = get_bal(bank, arg2);
         char balstr[11];
@@ -492,31 +464,44 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
 
         strncpy(arg3, arg3temp, strlen(arg3temp));
 
+		/*
         unsigned char hash[SHA_DIGEST_LENGTH];
 		memset(hash, 0x00, SHA_DIGEST_LENGTH);
         size_t plength = sizeof(arg3);
         //REMEMBER TO USE A SALT
         SHA1((unsigned char *)arg3, plength, hash);
 
-        /* PIN ONLY valid where card file and list (hashed) match!
+        PIN ONLY valid where card file and list match!
 		*/
+		
+		
         char *found = (char *) list_find(bank->usr_pin, arg2);
         if(found == NULL){
             send_ng(bank);
             return;
         }
+        
+        if(strcmp(found, arg3) == 0){
+        	send_s(bank);
+        	return;
+        } else {
+        	send_ng(bank);
+        	return;
+        }
 
-		unsigned char hash_from_list[SHA_DIGEST_LENGTH];
+		/*unsigned char hash_from_list[SHA_DIGEST_LENGTH];
 		memset(hash_from_list, 0x00, SHA_DIGEST_LENGTH);
 		size_t flength = sizeof(found);
 		SHA1((unsigned char*)found, flength, hash_from_list);
+		printf("pin: |%s|\n", arg3);
+		printf("pfl: |%s|\n", found);
 
-		if(memcmp(hash, hash_from_list, sizeof(hash_from_list)) != 0){
+		if(memcmp(hash, hash_from_list, SHA_DIGEST_LENGTH) != 0){
 			send_ng(bank);
 			return;
-		}		
+		}		*/
 
-        char *ext = ".card";
+        /*char *ext = ".card";
         int ufilelen = strlen(arg2) + 6; //5 = . c a r d and + 1 for null
         char userfile[ufilelen]; //5 = . c a r d
         memset(userfile, 0x00, ufilelen);
@@ -529,16 +514,19 @@ void bank_process_remote_command(Bank *bank, char *command, size_t len)
         }
 
         char line[SHA_DIGEST_LENGTH];
+        memset(line, 0x00, SHA_DIGEST_LENGTH);
         fgets(line, SHA_DIGEST_LENGTH, card);
 
         fclose(card);
         //not sure can use strcmp to compare hashes
-        if(memcmp(hash, line, sizeof(line)) == 0){
+        printf("Line: %s\n", line);
+        printf("Hash: %s\n", hash);
+        if(memcmp(hash, line, SHA_DIGEST_LENGTH) == 0){
             send_s(bank);
         } else {
             send_ng(bank);
-        }
-        return;
+        } 
+        return; */ 
 
     } else {
         send_invalid(bank);
@@ -747,7 +735,7 @@ read signature from temp file made
  by otherside*/
 int decrypt_and_verify(char *enc, char *dec){
     //placeholder
-    strncpy(dec, enc, sizeof(enc));
+    strncpy(dec, enc, strlen(enc));
     return 0;
 }
 
