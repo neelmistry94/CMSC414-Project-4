@@ -16,6 +16,8 @@ static const char prompt[] = "BANK: ";
 int main(int argc, char**argv)
 {
    int n;
+   char ext[] = ".bank";
+   char temp[6];
    char sendline[1000];
    char recvline[1000];
 
@@ -24,8 +26,14 @@ int main(int argc, char**argv)
       printf("Error opening bank initialization file\n");
       return 64;
     }
-    bank->init = fopen(argv[1], "r");
-    if(bank->init == NULL){
+
+    strncpy(temp, argv[1]+(strlen(argv[1])-5), 6);
+    
+    if(strncmp(temp, ext, strlen(ext)) == 0){
+      //printf("bank file: %s\n",argv[1]);
+      bank_init(argv[1]);
+    }
+    else{
       printf("Error opening bank initialization file\n");
       return 64;
     }

@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "bank.h"
 #include "ports.h"
 #include <string.h>
@@ -5,6 +6,15 @@
 #include <unistd.h>
 #include <limits.h>
 #include <openssl/sha.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/rsa.h>
+#include <openssl/evp.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
+#include <openssl/sha.h> 
+#include <openssl/objects.h> 
+#include <openssl/bn.h>
 
 #define MAX_ARG1_SIZE 12 //11 + 1 for Null
 #define MAX_ARG2_SIZE 251 //250 + Null character
@@ -12,6 +22,13 @@
 #define MAX_LINE_SIZE 1001 //10000 + Null
 #define ENC_LEN 2048
 #define MAX_INC_MSG 300
+#define MAX_CRYP 4098
+#define MAX_SIGN 300
+
+int padding = RSA_PKCS1_PADDING;
+unsigned int glo_slen = 0;
+unsigned char *glo_sig = NULL;
+char *bankfile;
 
 Bank* bank_create()
 {
@@ -51,11 +68,11 @@ void bank_free(Bank *bank)
 {
     if(bank != NULL)
     {
-        fclose(bank->init);
-		list_free(bank->pin_usr);
+	list_free(bank->pin_usr);
         list_free(bank->usr_pin);
         list_free(bank->pin_bal);
         close(bank->sockfd);
+        free(bankfile);
         free(bank);
     }
 }
@@ -718,13 +735,148 @@ int get_bal(Bank *bank, char *username){
     }
 }
 
+void bank_init(char *init){
+    bankfile = malloc((strlen(init)+1)*sizeof(char));
+    strncpy(bankfile, init, strlen(init)+1);
+}
+
+int signature(char *msg, RSA *r) { 
+    unsigned char *sig;
+    sig = (unsigned char*) malloc(RSA_size(r));
+    glo_sig = sig;
+    return RSA_sign(NID_sha1, (const unsigned char*)msg, (unsigned int)strlen(msg), sig, &glo_slen, r);
+}
+
+
+int verify(char *msg, RSA *r) {
+    return RSA_verify(NID_sha1, (const unsigned char*)msg, (unsigned int)strlen(msg), glo_sig, glo_slen, r); 
+}
+
+void getKeys(char *keys[]){
+    FILE *bank;    
+    char *line;
+    size_t leng = 0;
+    ssize_t lines;
+    char end[] = "-----END RSA PRIVATE KEY-----\n";
+    char start[] = "-----BEGIN RSA PRIVATE KEY-----\n";
+    int swit = 0;
+    
+    char *pubkey, *prikey;
+
+
+    pubkey = malloc(MAX_CRYP*sizeof(char));
+    prikey = malloc(MAX_CRYP*sizeof(char));
+    bank = fopen(bankfile, "r");
+    //atm = fopen("try.atm", "r");
+
+
+    //file opening fail
+    if(bank == NULL){
+        //printf("bank file not opening\n");
+        return;
+    }
+
+    while ((lines = getline(&line, &leng, bank)) != -1){
+        if(strncmp(line, start, strlen(start)) == 0){
+            swit = 1;
+        }
+    else if (strncmp(line, end, strlen(end)) == 0){
+            swit = 2;
+    }
+
+        if(swit == 0){
+            strncat(pubkey, line, strlen(line));
+        }
+    else if(swit == 1){
+        strncat(prikey, line, strlen(line));
+    }
+    else{
+        strncat(prikey, line, strlen(line));
+        break;
+    }
+    }
+
+    keys[0] = malloc(strlen(pubkey)+2);
+    keys[1] = malloc(strlen(prikey)+2);
+    strncpy(keys[0], pubkey, strlen(pubkey)+2);
+    strncpy(keys[1], prikey, strlen(prikey)+2);
+   
+
+    free(prikey);
+    free(pubkey);
+    fclose(bank);
+    
+}
+
+RSA * createRSA(char *key,int type)
+{
+    RSA *rsa= NULL;
+    BIO *keybio ;
+    keybio = BIO_new_mem_buf(key, -1);
+
+    //check bio 
+    if (keybio==NULL){
+        //printf( "Failed to create key BIO");
+        return NULL;
+    }
+
+    //check public 0 or private 1
+    if(type){
+        rsa = PEM_read_bio_RSAPrivateKey(keybio, &rsa,NULL, NULL);
+    }
+    else{
+        rsa = PEM_read_bio_RSA_PUBKEY(keybio, &rsa,NULL, NULL);
+    }
+
+    //check RSA
+    if(rsa == NULL){
+        //printf( "Failed to create RSA\n");
+    }
+ 
+    return rsa;
+}
+
 //-1 if failed to encrypt and sign
 /*stores encrypted msg into enc[], and signs it as well.
 store signature in a temp file to be read by otherside
 */
 int encrypt_and_sign(char *msg, char *enc){
-    strncpy(enc, msg, strlen(msg));
+    unsigned int sign;
+    //unsigned char encmsg[MAX_CRYP]={};
+    char *keys[2]; //atm public 0, bank private 1;
+    int i;
+
+    if(strlen(msg) > MAX_INC_MSG){
+        //printf("Message size is too big\n");
+        return -1;
+    }
+    getKeys(keys);
+
+    RSA *rsa = createRSA(keys[1],1);
+    if(rsa == NULL){
+        return -1;
+    }
+
+    int enclen = RSA_private_encrypt(strlen(msg),(unsigned char *)msg,(unsigned char*)enc,rsa,padding);
+    
+    if(enclen == -1){
+        //printf("Encryption failed\n");
+        return -1;
+    }
+
+    sign = signature(msg, rsa);
+    if (sign == 0){
+        //printf("Signing Failed");
+        return -1;
+    }
+
+    for(i=0; i< 2; i++){
+        free(keys[i]);
+    }
+
+    //printf("Encryption and Siging succeeded\n");
     return 0;
+
 }
 
 //-1 if failed to decrypt or verify
@@ -735,12 +887,51 @@ read signature from temp file made
  by otherside*/
 int decrypt_and_verify(char *enc, char *dec){
     //placeholder
-    strncpy(dec, enc, strlen(enc));
+    char *keys[2];
+    unsigned int verified;
+    int i;
+        
+    getKeys(keys);
+
+
+    RSA *rsa = createRSA(keys[0],0);
+    if(rsa == NULL){
+        return -1;
+    }
+
+    int declen = RSA_public_decrypt(strlen(enc),(unsigned char *)enc,(unsigned char *)dec,rsa,padding);
+    
+    if(declen == -1){
+        //printf("Decryption failed\n");
+        return -1;
+    }
+
+    verified = verify(dec, rsa);
+    if(verified == -1){
+        return -1;
+    }
+
+    for( i=0; i< 2; i++){
+        free(keys[i]);
+    }
+
+    //printf("Decryption and Verify succeeded\n");
     return 0;
+
 }
 
 
 //gets the salt for hashing
 void get_salt(char *salt){
+    FILE *bank;
+    size_t leng = 0;
+    ssize_t lines;
+   
+    if((bank = fopen(bankfile, "r")) != NULL){
+    while ((lines = getline(&salt, &leng, bank)) != -1){
+        }
+    printf("%s\n",salt);
+    }
 
+    fclose(bank);
 }

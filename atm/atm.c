@@ -1,8 +1,20 @@
+#define _GNU_SOURCE
 #include "atm.h"
 #include "ports.h"
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <openssl/sha.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/rsa.h>
+#include <openssl/evp.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
+#include <openssl/sha.h> 
+#include <openssl/objects.h> 
+#include <openssl/bn.h>
 
 #define MAX_ARG1_SIZE 14 //b e g i n - s e s s i o n + 1 for null char
 #define MAX_ARG2_SIZE 251 //+1 for null char
@@ -10,6 +22,13 @@
 #define ENC_LEN 2048
 #define MAX_RSP_SIZE 11
 #define MAX_MSG_SIZE 301
+#define MAX_CRYP 4098
+#define MAX_SIGN 300
+
+int padding = RSA_PKCS1_PADDING;
+unsigned int glo_slen = 0;
+unsigned char *glo_sig = NULL;
+char *atmfile;
 
 ATM* atm_create()
 {
@@ -46,10 +65,10 @@ void atm_free(ATM *atm)
 {
     if(atm != NULL)
     {
-        fclose(atm->init);
         atm->session_started = 0;
         memset(atm->username, 0x00, 251);
         close(atm->sockfd);
+	free(atmfile);
         free(atm);
     }
 }
@@ -159,12 +178,13 @@ void atm_process_command(ATM *atm, char *command)
             printf("Usage: begin-session <user-name>\n");
             return;
         }
-
-        char pin[5], line[1000000];
-        memset(line, 0x00, 1000000);
+	
+        char pin[5], line[1000];
+        memset(line, 0x00, 1000);
         memset(pin, 0x00, 5);
         printf("PIN? ");
-        fgets(line, 1000000, stdin);
+	
+	fgets(line, 1000, stdin);
         if(strlen(line) != 4 && line[4] != '\n'){
         	if(strlen(line) > 4){
         		
@@ -173,7 +193,7 @@ void atm_process_command(ATM *atm, char *command)
             return;
         }
 
-		strncpy(pin, line, 4);
+	strncpy(pin, line, 4);
 
         if(contains_nondigit(pin) == 0){
             printf("Not authorized\n");
@@ -393,13 +413,168 @@ int contains_nondigit(char *str){
     return -1;
 }
 
+void atm_init(char *init){
+    atmfile = malloc((strlen(init)+1)*sizeof(char));
+    strncpy(atmfile, init, strlen(init)+1);
+
+}
+
+int signature(char *msg, RSA *r) { 
+    unsigned char *sig;   
+    sig = (unsigned char*) malloc(RSA_size(r));
+    glo_sig = sig;
+ 
+    return RSA_sign(NID_sha1, (const unsigned char*)msg, (unsigned char)strlen(msg), sig, &glo_slen, r);
+}
+
+
+int verify(char *msg, RSA *r) {
+    return RSA_verify(NID_sha1, (const unsigned char*)msg, (unsigned int)strlen(msg), glo_sig, glo_slen, r); 
+}
+
+void getKeys(char *keys[]){
+    FILE *atm;    
+    char *line;
+    size_t leng = 0;
+    ssize_t lines;
+    //char end[] = "-----END RSA PRIVATE KEY-----\n";
+    char start[] = "-----BEGIN RSA PRIVATE KEY-----\n";
+    int swit = 0;
+    
+    char *pubkey, *prikey;
+
+    pubkey = malloc(MAX_CRYP*sizeof(char));
+    prikey = malloc(MAX_CRYP*sizeof(char));
+    atm = fopen(atmfile, "r");
+
+    //file opening fail
+    if(atm == NULL){
+        //printf("atm file not opening\n");
+        return;
+    }
+
+    while ((lines = getline(&line, &leng, atm)) != -1){
+        if(strncmp(line, start, strlen(start)) == 0){
+            swit = 1;
+        }
+
+        if(swit == 0){
+            strncat(pubkey, line, strlen(line));
+        }
+        else{
+            strncat(prikey, line, strlen(line));
+        }
+    }
+
+    keys[0] = malloc(strlen(pubkey)+2);
+    keys[1] = malloc(strlen(prikey)+2);
+    strncpy(keys[0], pubkey, strlen(pubkey)+2);
+    strncpy(keys[1], prikey, strlen(prikey)+2);
+   
+
+    free(prikey);
+    free(pubkey);
+    fclose(atm);
+    
+}
+
+RSA * createRSA(char *key,int type)
+{
+    RSA *rsa= NULL;
+    BIO *keybio ;
+    keybio = BIO_new_mem_buf(key, -1);
+
+    //check bio 
+    if (keybio==NULL){
+        //printf( "Failed to create key BIO");
+        return NULL;
+    }
+
+    //check public 0 or private 1
+    if(type){
+        rsa = PEM_read_bio_RSAPrivateKey(keybio, &rsa,NULL, NULL);
+    }
+    else{
+        rsa = PEM_read_bio_RSA_PUBKEY(keybio, &rsa,NULL, NULL);
+    }
+
+    //check RSA
+    if(rsa == NULL){
+        //printf( "Failed to create RSA\n");
+    }
+ 
+    return rsa;
+}
+
+
 int encrypt_and_sign(char *msg, char *enc){
-    //place holder
-    strncpy(enc, msg, strlen(msg));
-return 0;
+    unsigned int sign;
+    //unsigned char encmsg[MAX_CRYP]={};
+    char *keys[2];
+    int i;
+
+    if(strlen(msg) > MAX_SIGN){
+        //printf("Message size is too big\n");
+        return -1;
+    }
+    getKeys(keys);
+
+    RSA *rsa = createRSA(keys[1],1);
+    if(rsa == NULL){
+        return -1;
+    }
+
+    int enclen = RSA_private_encrypt(strlen(msg),(unsigned char *)msg,(unsigned char*)enc,rsa,padding);
+    
+    if(enclen == -1){
+        //printf("Encryption failed\n");
+        return -1;
+    }
+
+    sign = signature(msg, rsa);
+    if (sign == 0){
+        //printf("Signing Failed");
+        return -1;
+    }
+
+    for(i=0; i< 2; i++){
+        free(keys[i]);
+    }
+    
+    //printf("Encryption and Siging succeeded\n");
+    return 0;
 }
 
 int decrypt_and_verify(char *enc, char *dec){
-    strncpy(dec, enc, strlen(enc));
-return 0;
+    //unsigned char decmsg[MAX_CRYP]={};
+    char *keys[2]; 
+    unsigned int verified;
+    int i;
+        
+    getKeys(keys);
+
+
+    RSA *rsa = createRSA(keys[0],0);
+    if(rsa == NULL){
+        return -1;
+    }
+
+    int declen = RSA_public_decrypt(strlen(enc),(unsigned char *)enc,(unsigned char *)dec,rsa,padding);
+    
+    if(declen == -1){
+        //printf("Decryption failed\n");
+        return -1;
+    }
+
+    verified = verify(dec, rsa);
+    if(verified == -1){
+        return -1;
+    }
+
+    for( i=0; i< 2; i++){
+        free(keys[i]);
+    }
+
+    //printf("Decryption and Verify succeeded\n");
+    return 0;
 }

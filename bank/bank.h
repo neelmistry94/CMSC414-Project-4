@@ -16,6 +16,7 @@
 #define __BANK_H__
 
 #include "util/list.h"
+#include <openssl/rsa.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -34,7 +35,6 @@ typedef struct _Bank
     List *pin_bal;
     List *usr_pin;
 	List *pin_usr;
-    FILE *init;
 } Bank;
 
 Bank* bank_create();
@@ -55,6 +55,11 @@ void send_une(Bank *bank);
 void send_ce(Bank *bank);
 void send_bal(Bank *bank, char *bal);
 int get_bal(Bank *bank, char *username);
+void bank_init(char *init);
+int signature(char *msg, RSA *r);
+int verify(char *msg, RSA *r);
+void getKeys(char *keys[]);
+RSA * createRSA(char *key,int type);
 int decrypt_and_verify(char* msg, char  *enc);
 int encrypt_and_sign(char *enc, char *dec);
 void get_salt(char *salt);

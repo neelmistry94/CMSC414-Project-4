@@ -11,6 +11,7 @@
 #ifndef __ATM_H__
 #define __ATM_H__
 
+#include <openssl/rsa.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -27,7 +28,6 @@ typedef struct _ATM
     // TODO add more, as needed
     int session_started; //0 no, 1 yes //7 chars from ATM (): and 250 from max username + 1 for null
 	char username[251]; //+1 for null
-	FILE *init;
 } ATM;
 
 ATM* atm_create();
@@ -37,6 +37,11 @@ ssize_t atm_recv(ATM *atm, char *data, size_t max_data_len);
 void atm_process_command(ATM *atm, char *command);
 int username_is_valid(char *username);
 int contains_nondigit(char *str);
+void atm_init(char *init);
+int signature(char *msg, RSA *r);
+int verify(char *msg, RSA *r);
+void getKeys(char *keys[]);
+RSA * createRSA(char *key,int type);
 int encrypt_and_sign(char *msg, char *enc);
 int decrypt_and_verify(char *enc, char *dec);
 
