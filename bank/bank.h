@@ -33,6 +33,7 @@ typedef struct _Bank
     // TODO add more, as needed
     List *pin_bal;
     List *usr_pin;
+	List *pin_usr;
     FILE *init;
 } Bank;
 
@@ -53,7 +54,7 @@ void send_ng(Bank *bank);
 void send_une(Bank *bank);
 void send_ce(Bank *bank);
 void send_bal(Bank *bank, char *bal);
-int get_bal(Bank *bank, char *username, char *pin);
+int get_bal(Bank *bank, char *username);
 int decrypt_and_verify(char* msg, char  *enc);
 int encrypt_and_sign(char *enc, char *dec);
 void get_salt(char *salt);

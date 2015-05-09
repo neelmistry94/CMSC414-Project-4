@@ -33,3 +33,9 @@ clean:
 
 reset:
 	cd bin && rm -f *.atm *.bank *.card
+
+cclear:
+	cd bin && rm -f *.card
+
+mcclear:
+	make && make cclear

@@ -9,7 +9,7 @@
 #define MAX_LINE_SIZE 1001
 #define ENC_LEN 2048
 #define MAX_RSP_SIZE 11
-#define MAX_MSG_SIZE 300
+#define MAX_MSG_SIZE 301
 
 ATM* atm_create()
 {
@@ -83,7 +83,7 @@ void atm_process_command(ATM *atm, char *command)
     memset(arg2temp, 0x00, MAX_LINE_SIZE);
 
     sscanf(command, "%s %s", arg1temp, arg2temp);
-    if(strlen(arg1temp) > 13){
+    if(strlen(arg1temp) > 13 || strlen(arg1temp) < 1){
         printf("Invalid command\n");
         return;
     }
@@ -95,7 +95,7 @@ void atm_process_command(ATM *atm, char *command)
             return;
         }
 
-        if(arg2temp == NULL){
+        if(arg2temp == NULL || strlen(arg2temp) < 1){
             printf("Usage: begin-session <user-name>\n");
             return;
         }
@@ -137,9 +137,14 @@ void atm_process_command(ATM *atm, char *command)
             return;
         }
         
-        char resp[MAX_RSP_SIZE]; //max response is only 3 characaters
+        char resp[MAX_RSP_SIZE]; //max response is only 10 characaters
         memset(resp, 0x00, MAX_RSP_SIZE);
         sscanf(dec, "%s", resp);
+
+		if(strlen(resp) > 10){
+			printf("Unable to access %s's card\n", arg2);
+            return;		
+		}
 
         if(strcmp(resp, "invalid") == 0){
             printf("Usage: begin-session <user-name>\n");
@@ -197,6 +202,11 @@ void atm_process_command(ATM *atm, char *command)
 
         sscanf(dec, "%s", resp);
 
+		if(strlen(resp) > 10){
+			printf("Not authorized\n");
+			return;
+		}
+
         if(strcmp(resp, "s") !=  0){
             printf("Not authorized\n");
             return;
@@ -215,7 +225,7 @@ void atm_process_command(ATM *atm, char *command)
             return;
         }
 
-        if(arg2temp == NULL){
+        if(arg2temp == NULL || strlen(arg2temp) < 1){
             printf("Usage: withdraw <amt>\n");
             return;
         }
